@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Variables
-BACKUP_DIR="/f/backup/VirtualBox VMs/media-10.1.1.5/backup"  # Replace with your local backup directory
+BACKUP_DIR="/media/f/backup/VirtualBox VMs/media-10.1.1.5/backup"  # Replace with your local backup directory
 CONFIG_DIR="/home/lindsay/.config/appdata"
 DOCKER_DIR="/home/lindsay/.docker"
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
@@ -41,9 +41,31 @@ create_backups() {
     tar -czf "$VERSIONED_BACKUP_DIR/docker_backup.tar.gz" -C "$DOCKER_DIR" .
 }
 
+# Function to clean up old backups, keeping only the latest
+cleanup_old_backups() {
+    echo "Cleaning up old backups, keeping the latest $MAX_BACKUPS..."
+
+    # List backup directories, sort by modification time (newest first), and skip the newest ones
+    BACKUPS=$(ls -dt "$BACKUP_DIR"/backup_* 2>/dev/null)
+
+    # Check if there are more backups than the MAX_BACKUPS threshold
+    if [ $(echo "$BACKUPS" | wc -l) -gt "$MAX_BACKUPS" ]; then
+        # Find backups to delete: list all backups, except the first $MAX_BACKUPS
+        TO_DELETE=$(echo "$BACKUPS" | tail -n +$(($MAX_BACKUPS + 1)))
+
+        # Delete old backups
+        echo "Deleting old backups:"
+        echo "$TO_DELETE" | xargs rm -rf --
+        echo "Old backups removed."
+    else
+        echo "No old backups to remove."
+    fi
+}
+
 # Main script execution
 stop_docker_containers
 create_backups
+cleanup_old_backups
 restart_docker_containers
 
 echo "Backup completed and stored in $VERSIONED_BACKUP_DIR."
