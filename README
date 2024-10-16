@@ -3,12 +3,6 @@
 1.  Install ubuntu server, ensure SSH is installed/enabled
 
 2.  SSH into server and execute these commands:
-	> nano setup.sh
-	
-	Paste contents of setup.sh from this folder - if you want to make changes to the setup script, do it now.
-	
-	CTRL-X (Y to save)
-	
-	> sudo chmod +x setup.sh
-	
-	> sudo setup.sh
+	$ wget https://github.com/improvmasta/homelab/raw/refs/heads/main/setup.sh
+	$ sudo chmod +x setup.sh
+	$ sudo ./setup.sh
