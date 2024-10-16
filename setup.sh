@@ -1,77 +1,74 @@
 #!/bin/bash
 
-##
-#SET YOUR SMB SHARES HERE - "//server/share /media/localshare"
-##
+# Configuration
 SERVER="10.1.1.3"
-SHARE1="d"
-SHARE2="e"
-SHARE3="f"
+SHARES=("d" "e" "f")  # Add more shares if needed
 
-##QUIT IF NOT ROOT
+# Ensure script is run as root
 if [ "$(id -u)" -ne 0 ]; then
-        echo 'This script must be run by root' >&2
-        exit 1
+    echo "This script must be run as root."
+    exit 1
 fi
 
-##
-#Collect local network SMB client user/pw
-##
-read -p "Enter current username: " CUSER
-read -p "Enter LAN Samba username: " SMBUSER
-read -s -p "Enter LAN Samba password: " SMBPW
+# Collect user input
+read -p "Enter your local username: " LOCAL_USER
+read -p "Enter Samba username: " SMB_USER
+read -s -p "Enter Samba password: " SMB_PASSWORD
+echo ""
 
-##
-#Install Basic Software
-##
-apt-get update -y
-apt-get upgrade -y
-apt install -y net-tools gcc make perl samba cifs-utils winbind curl git bzip2 tar
-apt-get autoremove
-apt-get autoclean
+# Update and install necessary packages
+apt-get update -y && apt-get upgrade -y
+apt-get install -y net-tools gcc make perl samba cifs-utils winbind curl git bzip2 tar
+apt-get autoremove -y && apt-get autoclean -y
 journalctl --vacuum-time=3d
 
-##
-#Share / with Samba - script will prompt for password
-##
-echo "[${CUSER}]" >>  /etc/samba/smb.conf
-echo "    path = /home/${CUSER}" >>  /etc/samba/smb.conf
-echo "    read only = no" >>  /etc/samba/smb.conf
-echo "    browsable = yes" >>  /etc/samba/smb.conf
-service smbd restart
+# Configure Samba share
+cat <<EOF >> /etc/samba/smb.conf
+[$LOCAL_USER]
+    path = /home/$LOCAL_USER
+    read only = no
+    browsable = yes
+EOF
+systemctl restart smbd
 ufw allow samba
-smbpasswd -a ${CUSER}
+(echo "$SMB_PASSWORD"; echo "$SMB_PASSWORD") | smbpasswd -s -a "$LOCAL_USER"
 
-##
-#Connect to Server Drives with smbclient
-##
-mkdir /media/${SHARE1} ;mkdir /media/${SHARE2};mkdir /media/${SHARE3}
-echo "//${SERVER}/${SHARE1} /media/${SHARE1} cifs nobrl,username=${SMBUSER},password=${SMBPW},iocharset=utf8,file_mode=0777,dir_mode=0777 0 0" >> /etc/fstab
-echo "//${SERVER}/${SHARE2} /media/${SHARE2} cifs nobrl,username=${SMBUSER},password=${SMBPW},iocharset=utf8,file_mode=0777,dir_mode=0777 0 0" >> /etc/fstab
-echo "//${SERVER}/${SHARE3} /media/${SHARE3} cifs nobrl,username=${SMBUSER},password=${SMBPW},iocharset=utf8,file_mode=0777,dir_mode=0777 0 0" >> /etc/fstab
+# Mount network shares
+for SHARE in "${SHARES[@]}"; do
+    MOUNT_POINT="/media/$SHARE"
+    mkdir -p "$MOUNT_POINT"
+    echo "//$SERVER/$SHARE $MOUNT_POINT cifs nobrl,username=$SMB_USER,password=$SMB_PASSWORD,iocharset=utf8,file_mode=0777,dir_mode=0777 0 0" >> /etc/fstab
+done
 mount -a
 
-##
-#Setup Aliases
-##
-echo "alias dock='cd ~/.docker/compose'" >> /home/${CUSER}/.bashrc
-echo "alias dc='cd ~/.config/appdata/'" >> /home/${CUSER}/.bashrc
-echo "alias dr='docker compose -f ~/.docker/compose/docker-compose.yml restart $1'" >> /home/${CUSER}/.bashrc
-echo "alias dstart='docker compose -f ~/.docker/compose/docker-compose.yml start $1'" >> /home/${CUSER}/.bashrc
-echo "alias dstop='docker compose -f ~/.docker/compose/docker-compose.yml stop $1'" >> /home/${CUSER}/.bashrc
-echo "alias lsl='ls -la'" >> /home/${CUSER}/.bashrc
-source .bashrc
+# Setup Bash aliases
+cat <<EOF >> /home/$LOCAL_USER/.bashrc
+alias dock='cd ~/.docker/compose'
+alias dc='cd ~/.config/appdata/'
+alias dr='docker compose -f ~/.docker/compose/docker-compose.yml restart'
+alias dstart='docker compose -f ~/.docker/compose/docker-compose.yml start'
+alias dstop='docker compose -f ~/.docker/compose/docker-compose.yml stop'
+alias lsl='ls -la'
+EOF
+source /home/$LOCAL_USER/.bashrc
 
-##
-#Create Update script
-##
-echo "sudo apt-get update -y;sudo apt-get upgrade -y;sudo apt-get autoremove;sudo apt-get autoclean;sudo journalctl --vacuum-time=3d;cd ~/.config/appdata/plex/Library/'Application Support'/'Plex Media Server'/Logs;ls | grep -v '\.log$' | xargs rm" > /home/${CUSER}/update
-chmod +x /home/${CUSER}/update
+# Create update script
+cat <<EOF > /home/$LOCAL_USER/update
+#!/bin/bash
+sudo apt-get update -y && sudo apt-get upgrade -y
+sudo apt-get autoremove -y && sudo apt-get autoclean -y
+sudo journalctl --vacuum-time=3d
+cd ~/.config/appdata/plex/Library/'Application Support'/'Plex Media Server'/Logs
+ls | grep -v '\\.log\$' | xargs rm
+EOF
+chmod +x /home/$LOCAL_USER/update
 
-##
-#Create DockSTARTer Install Script
-##
-echo 'git clone https://github.com/GhostWriters/DockSTARTer "/home/${USER}/.docker"' > installds
-echo 'bash /home/"${USER}"/.docker/main.sh -vi' >> installds
-chmod +x /home/${CUSER}/installds
-echo "****YOU MUST RUN ./installds TO INSTALL DOCKSTARTER***"
+# Create DockSTARTer install script
+cat <<EOF > /home/$LOCAL_USER/installds
+#!/bin/bash
+git clone https://github.com/GhostWriters/DockSTARTer "/home/$LOCAL_USER/.docker"
+bash /home/$LOCAL_USER/.docker/main.sh -vi
+EOF
+chmod +x /home/$LOCAL_USER/installds
+
+echo "Setup completed. Run './installds' to install DockSTARTer."
