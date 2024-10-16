@@ -1,0 +1,14 @@
+1.  Create VM, set to boot from ubuntu server ISO image.  Do not boot until setting Network to Bridged, copying MAC address and creating Static lease for planned IP.
+
+1.  Install ubuntu server, ensure SSH is installed/enabled
+
+2.  SSH into server and execute these commands:
+	> nano setup.sh
+	
+	Paste contents of setup.sh from this folder - if you want to make changes to the setup script, do it now.
+	
+	CTRL-X (Y to save)
+	
+	> sudo chmod +x setup.sh
+	
+	> sudo setup.sh
