@@ -4,6 +4,7 @@
 BACKUP_DIR="/media/f/backup/VirtualBox VMs/media-10.1.1.5/backup"  # Replace with your local backup directory
 CONFIG_DIR="/home/lindsay/.config/appdata"
 DOCKER_DIR="/home/lindsay/.docker"
+STORAGE_DIR="/home/lindsay/storage"
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 VERSIONED_BACKUP_DIR="$BACKUP_DIR/backup_$TIMESTAMP"
 MAX_BACKUPS=1
@@ -36,6 +37,9 @@ restart_docker_containers() {
 create_backups() {
     echo "Creating backup of $CONFIG_DIR..."
     tar -czf "$VERSIONED_BACKUP_DIR/appdata_backup.tar.gz" -C "$CONFIG_DIR" .
+
+    echo "Creating backup of $STORAGE_DIR..."
+    tar -czf "$VERSIONED_BACKUP_DIR/storage_backup.tar.gz" -C "$STORAGE_DIR" .
 
     echo "Creating backup of $DOCKER_DIR..."
     tar -czf "$VERSIONED_BACKUP_DIR/docker_backup.tar.gz" -C "$DOCKER_DIR" .
