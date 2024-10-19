@@ -15,6 +15,14 @@ read -p "Enter your local username: " LOCAL_USER
 read -p "Enter Samba username: " SMB_USER
 read -s -p "Enter Samba password: " SMB_PASSWORD
 echo ""
+read -p "Enter the desired hostname for this server: " NEW_HOSTNAME
+
+# Set the new hostname
+CURRENT_HOSTNAME=$(hostname)
+echo "$NEW_HOSTNAME" > /etc/hostname
+sed -i "s/$CURRENT_HOSTNAME/$NEW_HOSTNAME/g" /etc/hosts
+hostnamectl set-hostname "$NEW_HOSTNAME"
+echo "Hostname has been changed to $NEW_HOSTNAME."
 
 # Update and install necessary packages
 apt-get update -y && apt-get upgrade -y
