@@ -2,7 +2,7 @@
 
 # Configuration
 SERVER="10.1.1.3"
-SHARES=("d" "e" "f")  # Add more shares if needed
+SHARES=("d" "e" "f" "v")  # Add more shares if needed
 
 # Ensure script is run as root
 if [ "$(id -u)" -ne 0 ]; then
