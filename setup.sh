@@ -88,6 +88,33 @@ EOF
     log "Network shares mounted successfully."
 }
 
+# Configure DNS if setting up as Pi-hole
+configure_dns() {
+    read -p "Is this system going to be configured as a Pi-hole? (yes/no): " pihole_choice
+
+    if [[ "$pihole_choice" == "yes" ]]; then
+        read -p "Enter the static IP of the DNS server (e.g., 10.1.1.1): " static_ip
+
+        # Check if the DNS is already configured
+        if grep -q "DNS=$static_ip" /etc/systemd/resolved.conf; then
+            log "DNS settings are already configured with IP: $static_ip"
+        else
+            log "Configuring DNS settings..."
+            echo "DNS=$static_ip" >> /etc/systemd/resolved.conf
+            echo "Domains=lan" >> /etc/systemd/resolved.conf
+            echo "Cache=no" >> /etc/systemd/resolved.conf
+            echo "DNSStubListener=no" >> /etc/systemd/resolved.conf
+
+            # Restart systemd-resolved service
+            systemctl restart systemd-resolved || { log "Failed to restart systemd-resolved"; exit 1; }
+
+            log "DNS settings configured with static IP: $static_ip"
+        fi
+    else
+        log "Skipping Pi-hole DNS configuration."
+    fi
+}
+
 # Create or update the update script
 create_update_script() {
     log "Creating or updating update script for $LOCAL_USER..."
@@ -156,6 +183,7 @@ EOF
 set_hostname
 install_packages
 configure_samba
+configure_dns
 create_update_script
 create_dockstarter_script
 
