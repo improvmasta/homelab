@@ -18,9 +18,18 @@ echo ""
 
 # Update and install necessary packages
 apt-get update -y && apt-get upgrade -y
-apt-get install -y net-tools gcc make perl samba cifs-utils winbind curl git bzip2 tar
+apt-get install -y net-tools gcc make perl samba cifs-utils winbind curl git bzip2 tar linux-virtual linux-cloud-tools-virtual linux-tools-virtual
 apt-get autoremove -y && apt-get autoclean -y
 journalctl --vacuum-time=3d
+
+# Setup Hyper-V Integration
+cat <<EOF >> /etc/initramfs-tools/modules
+hv_vmbus
+hv_storvsc
+hvblkvsc
+hv_netvsc
+EOF
+update-initramfs -u
 
 # Configure Samba share
 cat <<EOF >> /etc/samba/smb.conf
