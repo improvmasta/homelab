@@ -4,6 +4,7 @@
 SERVER="10.1.1.3"
 SHARES=("d" "e" "f" "v")  # Add more shares if needed
 LOGFILE="/var/log/setup.log"
+BASH_ALIASES_FILE="/home/$LOCAL_USER/.bash_aliases"
 
 # Ensure script is run as root
 if [ "$(id -u)" -ne 0 ]; then
@@ -115,6 +116,36 @@ configure_dns() {
     fi
 }
 
+# Set up Bash aliases
+configure_bash_aliases() {
+    log "Setting up Bash aliases for $LOCAL_USER..."
+
+    # Check if the alias file already exists
+    if [ -f "$BASH_ALIASES_FILE" ]; then
+        log "Bash alias file already exists. Checking for updates."
+    else
+        touch "$BASH_ALIASES_FILE"
+        log "Created Bash alias file."
+    fi
+
+    # Add aliases to .bash_aliases
+    cat <<EOF >> "$BASH_ALIASES_FILE"
+alias dock='cd ~/.docker/compose'
+alias dc='cd ~/.config/appdata/'
+alias dr='docker compose -f ~/.docker/compose/docker-compose.yml restart'
+alias dstart='docker compose -f ~/.docker/compose/docker-compose.yml start'
+alias dstop='docker compose -f ~/.docker/compose/docker-compose.yml stop'
+alias lsl='ls -la'
+EOF
+
+    # Ensure the .bashrc file sources the .bash_aliases file
+    if ! grep -q "if \[ -f ~/.bash_aliases \]" "/home/$LOCAL_USER/.bashrc"; then
+        echo "if [ -f ~/.bash_aliases ]; then . ~/.bash_aliases; fi" >> "/home/$LOCAL_USER/.bashrc"
+    fi
+
+    log "Bash aliases set up successfully."
+}
+
 # Create or update the update script
 create_update_script() {
     log "Creating or updating update script for $LOCAL_USER..."
@@ -168,23 +199,3 @@ EOF
             echo "$NEW_CONTENT" > $DOCKSTARTER_SCRIPT
             log "DockSTARTer install script updated successfully."
         else
-            log "DockSTARTer install script is already up to date."
-        fi
-    else
-        echo "#!/bin/bash" > $DOCKSTARTER_SCRIPT
-        echo "git clone https://github.com/GhostWriters/DockSTARTer \"/home/$LOCAL_USER/.docker\"" >> $DOCKSTARTER_SCRIPT
-        echo "bash /home/$LOCAL_USER/.docker/main.sh -vi" >> $DOCKSTARTER_SCRIPT
-        chmod +x $DOCKSTARTER_SCRIPT
-        log "DockSTARTer install script created successfully."
-    fi
-}
-
-# Run everything
-set_hostname
-install_packages
-configure_samba
-configure_dns
-create_update_script
-create_dockstarter_script
-
-log "Setup completed. Run './installds' to install DockSTARTer."
