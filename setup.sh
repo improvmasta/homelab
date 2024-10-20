@@ -171,8 +171,8 @@ configure_bash_aliases
 create_update_script
 
 # Ask if the user wants to create the DockSTARTer install script
-read -p "Do you want to create a DockSTARTer install script? (yes/no): " dockstarter_choice
-if [[ "$dockstarter_choice" == "yes" ]]; then
+read -p "Do you want to create a DockSTARTer install script? y/n: " dockstarter_choice
+if [[ "$dockstarter_choice" == "y" ]]; then
     DOCKSTARTER_SCRIPT="/home/$LOCAL_USER/installds"
 
     cat <<EOF > "$DOCKSTARTER_SCRIPT"
@@ -186,7 +186,7 @@ EOF
 fi
 
 # Ask if the user wants Docker standalone installed
-read -p "Do you want to install Docker standalone? (yes/no): " docker_choice
+read -p "Do you want to install Docker standalone? y/n: " docker_choice
 if [[ "$docker_choice" == "yes" ]]; then
     log "Downloading and running the Docker installation script..."
     curl -fsSL https://github.com/improvmasta/homelab/raw/refs/heads/main/installdocker | bash || { log "Docker installation failed"; exit 1; }
