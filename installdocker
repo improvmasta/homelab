@@ -1,0 +1,71 @@
+#!/bin/bash
+
+# Function to check the exit status and exit on failure
+check_status() {
+  [ $? -ne 0 ] && echo "Error: $1 failed." && exit 1
+}
+
+# Function to prompt the user for yes/no response
+prompt_confirm() {
+  while true; do
+    read -r -p "$1 [y/n]: " response
+    case "$response" in
+      [yY][eE][sS]|[yY]) return 0 ;;
+      [nN][oO]|[nN]) return 1 ;;
+      *) echo "Please answer yes or no." ;;
+    esac
+  done
+}
+
+# Remove old Docker and related packages
+remove_docker() {
+  echo "Removing old Docker packages..."
+  for pkg in docker.io docker-doc docker-compose docker-compose-v2 podman-docker containerd runc; do
+    sudo apt-get remove -y $pkg || true
+  done
+  check_status "Removing Docker packages"
+}
+
+# Remove Docker data (containers, volumes, images)
+remove_docker_data() {
+  echo "Removing Docker containers, volumes, and data..."
+  sudo rm -rf /var/lib/docker /var/lib/containerd
+  check_status "Removing Docker data"
+}
+
+# Install Docker
+install_docker() {
+  sudo apt-get update
+  check_status "Updating apt-get"
+
+  sudo apt-get install -y ca-certificates curl
+  check_status "Installing prerequisites"
+
+  sudo install -m 0755 -d /etc/apt/keyrings
+  sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+  sudo chmod a+r /etc/apt/keyrings/docker.asc
+  check_status "Downloading and setting Docker GPG key"
+
+  echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+    sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+  check_status "Adding Docker repository"
+
+  sudo apt-get update
+  sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+  check_status "Installing Docker"
+}
+
+# Check if Docker is installed and prompt user for removal
+if command -v docker &>/dev/null; then
+  echo "Docker is currently installed."
+  prompt_confirm "Do you want to remove Docker and its packages?" && remove_docker || echo "Docker removal skipped."
+  prompt_confirm "Do you want to remove all Docker containers and volumes? This action is irreversible." && remove_docker_data || echo "Containers and volumes removal skipped."
+else
+  echo "Docker is not installed."
+fi
+
+# Install Docker
+install_docker
+
+# Add current user to Docker group
+sudo usermod -aG docker $USER && echo "Added user to Docker group. You may need to log out and back in."
