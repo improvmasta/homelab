@@ -17,81 +17,84 @@ log() {
 }
 
 # Collect user input
+read -p "Enter Samba username: " SMB_USER
+read -s -p "Enter Samba password: " SMB_PASSWORD
+echo ""
 read -p "Enter the desired hostname for this server: " NEW_HOSTNAME
 
+# Set the new hostname
 set_hostname() {
     log "Setting hostname to $NEW_HOSTNAME..."
+    CURRENT_HOSTNAME=$(hostname)
     echo "$NEW_HOSTNAME" > /etc/hostname
-    sed -i "s/$(hostname)/$NEW_HOSTNAME/g" /etc/hosts
+    sed -i "s/$CURRENT_HOSTNAME/$NEW_HOSTNAME/g" /etc/hosts
     hostnamectl set-hostname "$NEW_HOSTNAME" || { log "Failed to set hostname"; exit 1; }
-    log "Hostname changed to $NEW_HOSTNAME."
+    log "Hostname has been changed to $NEW_HOSTNAME."
 }
 
+# Install necessary packages
 install_packages() {
     log "Updating and installing necessary packages..."
-    apt-get update -y && apt-get upgrade -y
-    apt-get install -y net-tools gcc make perl samba cifs-utils winbind curl git bzip2 tar linux-virtual linux-cloud-tools-virtual linux-tools-virtual
-    apt-get autoremove -y && apt-get autoclean -y
+    apt-get update -y && apt-get upgrade -y || { log "Failed to update packages"; exit 1; }
+    apt-get install -y net-tools gcc make perl samba cifs-utils winbind curl git bzip2 tar linux-virtual linux-cloud-tools-virtual linux-tools-virtual || { log "Package installation failed"; exit 1; }
+    apt-get autoremove -y && apt-get autoclean -y || { log "Autoremove failed"; exit 1; }
     log "Package installation complete."
 }
 
+# Configure Samba and mount network shares
 configure_samba() {
-    log "Checking Samba configuration for $LOCAL_USER..."
-    
-    # Check if Samba configuration exists for the user
+    log "Configuring Samba for $LOCAL_USER..."
+
     if ! grep -q "\[$LOCAL_USER\]" /etc/samba/smb.conf; then
-        read -p "Enter Samba username: " SMB_USER
-        read -s -p "Enter Samba password: " SMB_PASSWORD
-        echo ""
-        
-        # Add Samba configuration for the user
-        {
-            echo "[$LOCAL_USER]"
-            echo "    path = /home/$LOCAL_USER"
-            echo "    read only = no"
-            echo "    browsable = yes"
-        } >> /etc/samba/smb.conf
+        cat <<EOF >> /etc/samba/smb.conf
+[$LOCAL_USER]
+    path = /home/$LOCAL_USER
+    read only = no
+    browsable = yes
+EOF
         log "Samba configuration added for $LOCAL_USER."
-        
-        systemctl restart smbd || { log "Failed to restart Samba"; exit 1; }
-        ufw allow samba || { log "Failed to configure firewall for Samba"; exit 1; }
-        (echo "$SMB_PASSWORD"; echo "$SMB_PASSWORD") | smbpasswd -s -a "$LOCAL_USER" || { log "Failed to set Samba password"; exit 1; }
-        log "Samba configured successfully."
-
-        CREDENTIALS_FILE="/etc/samba/credentials_$LOCAL_USER"
-        {
-            echo "username=$SMB_USER"
-            echo "password=$SMB_PASSWORD"
-        } > "$CREDENTIALS_FILE"
-        chmod 600 "$CREDENTIALS_FILE"
-
-        log "Mounting network shares..."
-        for SHARE in "${SHARES[@]}"; do
-            MOUNT_POINT="/media/$SHARE"
-            mkdir -p "$MOUNT_POINT"
-
-            if ! grep -q "//$SERVER/$SHARE" /etc/fstab; then
-                echo "//$SERVER/$SHARE $MOUNT_POINT cifs credentials=$CREDENTIALS_FILE,iocharset=utf8,file_mode=0777,dir_mode=0777 0 0" >> /etc/fstab
-                log "Added entry for $SHARE to /etc/fstab."
-                mount "$MOUNT_POINT" || { log "Failed to mount $SHARE"; exit 1; }
-            else
-                log "Mount entry for $SHARE already exists in /etc/fstab."
-            fi
-        done
-
-        log "Network shares mounted successfully."
     else
-        log "Samba configuration for $LOCAL_USER already exists. Skipping Samba setup."
+        log "Samba configuration for $LOCAL_USER already exists."
     fi
+
+    systemctl restart smbd || { log "Failed to restart Samba"; exit 1; }
+    ufw allow samba || { log "Failed to configure firewall for Samba"; exit 1; }
+    (echo "$SMB_PASSWORD"; echo "$SMB_PASSWORD") | smbpasswd -s -a "$LOCAL_USER" || { log "Failed to set Samba password"; exit 1; }
+    log "Samba configured successfully."
+
+    log "Mounting network shares..."
+
+    CREDENTIALS_FILE="/etc/samba/credentials_$LOCAL_USER"
+    echo "username=$SMB_USER" > "$CREDENTIALS_FILE"
+    echo "password=$SMB_PASSWORD" >> "$CREDENTIALS_FILE"
+    chmod 600 "$CREDENTIALS_FILE"
+
+    for SHARE in "${SHARES[@]}"; do
+        MOUNT_POINT="/media/$SHARE"
+        mkdir -p "$MOUNT_POINT"
+
+        if ! grep -q "//$SERVER/$SHARE" /etc/fstab; then
+            echo "//$SERVER/$SHARE $MOUNT_POINT cifs credentials=$CREDENTIALS_FILE,iocharset=utf8,file_mode=0777,dir_mode=0777 0 0" >> /etc/fstab
+            log "Added entry for $SHARE to /etc/fstab."
+            mount "$MOUNT_POINT" || { log "Failed to mount $SHARE"; exit 1; }
+        else
+            log "Mount entry for $SHARE already exists in /etc/fstab."
+        fi
+    done
+
+    log "Network shares mounted successfully."
 }
 
+# Configure DNS if setting up as Pi-hole
 configure_dns() {
     read -p "Is this system going to be configured as a Pi-hole? (yes/no): " pihole_choice
 
     if [[ "$pihole_choice" == "yes" ]]; then
         read -p "Enter the static IP of the DNS server (e.g., 10.1.1.1): " static_ip
 
-        if ! grep -q "DNS=$static_ip" /etc/systemd/resolved.conf; then
+        if grep -q "DNS=$static_ip" /etc/systemd/resolved.conf; then
+            log "DNS settings are already configured with IP: $static_ip"
+        else
             log "Configuring DNS settings..."
             {
                 echo "DNS=$static_ip"
@@ -101,16 +104,15 @@ configure_dns() {
             } >> /etc/systemd/resolved.conf
 
             systemctl restart systemd-resolved || { log "Failed to restart systemd-resolved"; exit 1; }
+
             log "DNS settings configured with static IP: $static_ip"
-        else
-            log "DNS settings are already configured with IP: $static_ip"
         fi
     else
         log "Skipping Pi-hole DNS configuration."
     fi
 }
 
-# Configure Bash aliases
+# Set up Bash aliases
 configure_bash_aliases() {
     log "Setting up Bash aliases for $LOCAL_USER..."
     BASH_ALIASES_FILE="/home/$LOCAL_USER/.bash_aliases"
@@ -134,6 +136,30 @@ configure_bash_aliases() {
     chmod 644 "$BASH_ALIASES_FILE"
 
     log "Bash aliases setup completed for $LOCAL_USER."
+}
+
+# Create or update the update script
+create_update_script() {
+    log "Creating or updating update script for $LOCAL_USER..."
+    UPDATE_SCRIPT="/home/$LOCAL_USER/update"
+
+    NEW_CONTENT=$(cat <<EOF
+#!/bin/bash
+sudo apt-get update -y && sudo apt-get upgrade -y
+sudo apt-get autoremove -y && sudo apt-get autoclean -y
+sudo journalctl --vacuum-time=3d
+cd ~/.config/appdata/plex/Library/'Application Support'/'Plex Media Server'/Logs
+ls | grep -v '\\.log\$' | xargs rm
+EOF
+)
+
+    if [ ! -f "$UPDATE_SCRIPT" ] || [ "$NEW_CONTENT" != "$(cat $UPDATE_SCRIPT)" ]; then
+        echo "$NEW_CONTENT" > "$UPDATE_SCRIPT"
+        chmod +x "$UPDATE_SCRIPT"
+        log "Update script created or updated successfully."
+    else
+        log "Update script is already up to date."
+    fi
 }
 
 # Main Execution
