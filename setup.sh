@@ -38,10 +38,21 @@ collect_samba_info() {
     echo ""
 }
 
+# Function to get a yes/no response
+get_yes_no() {
+    while true; do
+        read -p "$1 (yes/no or y/n): " response
+        case "$response" in
+            yes|y) return 0 ;;
+            no|n) return 1 ;;
+            *) echo "Please answer yes, no, y, or n." ;;
+        esac
+    done
+}
+
 # Set the new hostname
 set_hostname() {
-    read -p "Do you want to change the current hostname? (yes/no): " change_hostname
-    if [[ "$change_hostname" == "yes" ]]; then
+    if get_yes_no "Do you want to change the current hostname?"; then
         read -p "Enter the desired hostname for this server: " NEW_HOSTNAME
         log "Setting hostname to $NEW_HOSTNAME..."
         CURRENT_HOSTNAME=$(hostname)
@@ -131,9 +142,7 @@ EOF
 
 # Configure DNS if setting up as Pi-hole
 configure_dns() {
-    read -p "Is this system going to be configured as a Pi-hole? (yes/no): " pihole_choice
-
-    if [[ "$pihole_choice" == "yes" ]]; then
+    if get_yes_no "Is this system going to be configured as a Pi-hole?"; then
         log "Configuring DNS settings..."
         {
             echo "DNS=10.1.1.1"
@@ -218,10 +227,9 @@ configure_bash_aliases() {
 
 # Ask if the user wants to install Docker
 install_docker() {
-    read -p "Do you want to install Docker? (yes/no): " docker_choice
-    if [[ "$docker_choice" == "yes" ]]; then
-        log "Downloading and running the Docker installation script..."
-        curl -fsSL https://github.com/improvmasta/homelab/raw/refs/heads/main/installdocker | bash
+    if get_yes_no "Do you want to install Docker?"; then
+        log "Installing Docker..."
+        curl -fsSL https://github.com/improvmasta/homelab/raw/refs/heads/main/installdocker | bash || { log "Docker installation failed"; exit 1; }
         log "Docker installation completed."
     else
         log "Skipping Docker installation."
