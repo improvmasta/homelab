@@ -190,7 +190,6 @@ if [[ "$dockstarter_choice" == "y" ]]; then
 git clone https://github.com/GhostWriters/DockSTARTer "/home/$LOCAL_USER/.docker"
 bash /home/$LOCAL_USER/.docker/main.sh -vi
 EOF
-
     chmod +x "$DOCKSTARTER_SCRIPT"
     log "DockSTARTer install script created successfully."
 fi
