@@ -16,14 +16,21 @@ log() {
     echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" | tee -a "$LOGFILE"
 }
 
-# Collect user input
-read -p "Enter Samba username: " SMB_USER
-read -s -p "Enter Samba password: " SMB_PASSWORD
-echo ""
-read -p "Enter the desired hostname for this server: " NEW_HOSTNAME
+# Check if Samba user exists
+samba_user_exists() {
+    pdbedit -L | grep -q "$1"
+}
+
+# Collect Samba information if not already configured
+collect_samba_info() {
+    read -p "Enter Samba username: " SMB_USER
+    read -s -p "Enter Samba password: " SMB_PASSWORD
+    echo ""
+}
 
 # Set the new hostname
 set_hostname() {
+    read -p "Enter the desired hostname for this server: " NEW_HOSTNAME
     log "Setting hostname to $NEW_HOSTNAME..."
     CURRENT_HOSTNAME=$(hostname)
     echo "$NEW_HOSTNAME" > /etc/hostname
@@ -45,21 +52,24 @@ install_packages() {
 configure_samba() {
     log "Configuring Samba for $LOCAL_USER..."
 
-    if ! grep -q "\[$LOCAL_USER\]" /etc/samba/smb.conf; then
+    if ! samba_user_exists "$LOCAL_USER"; then
+        collect_samba_info
+
         cat <<EOF >> /etc/samba/smb.conf
-[$LOCAL_USER]
+[$SMB_USER]
     path = /home/$LOCAL_USER
     read only = no
     browsable = yes
 EOF
-        log "Samba configuration added for $LOCAL_USER."
+        log "Samba configuration added for $SMB_USER."
+
+        (echo "$SMB_PASSWORD"; echo "$SMB_PASSWORD") | smbpasswd -s -a "$SMB_USER" || { log "Failed to set Samba password"; exit 1; }
     else
         log "Samba configuration for $LOCAL_USER already exists."
     fi
 
     systemctl restart smbd || { log "Failed to restart Samba"; exit 1; }
     ufw allow samba || { log "Failed to configure firewall for Samba"; exit 1; }
-    (echo "$SMB_PASSWORD"; echo "$SMB_PASSWORD") | smbpasswd -s -a "$LOCAL_USER" || { log "Failed to set Samba password"; exit 1; }
     log "Samba configured successfully."
 
     log "Mounting network shares..."
@@ -187,7 +197,7 @@ fi
 
 # Ask if the user wants Docker standalone installed
 read -p "Do you want to install Docker standalone? y/n: " docker_choice
-if [[ "$docker_choice" == "yes" ]]; then
+if [[ "$docker_choice" == "y" ]]; then
     log "Downloading and running the Docker installation script..."
     curl -fsSL https://github.com/improvmasta/homelab/raw/refs/heads/main/installdocker | bash || { log "Docker installation failed"; exit 1; }
     log "Docker installation completed successfully."
