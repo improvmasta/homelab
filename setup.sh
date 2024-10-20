@@ -183,6 +183,7 @@ create_update_script
 # Ask if the user wants to create the DockSTARTer install script
 read -p "Do you want to create a DockSTARTer install script? y/n: " dockstarter_choice
 if [[ "$dockstarter_choice" == "y" ]]; then
+    # Create the DockSTARTER_SCRIPT
     DOCKSTARTER_SCRIPT="/home/$LOCAL_USER/installds"
 
     cat <<EOF > "$DOCKSTARTER_SCRIPT"
@@ -190,17 +191,18 @@ if [[ "$dockstarter_choice" == "y" ]]; then
 git clone https://github.com/GhostWriters/DockSTARTer "/home/$LOCAL_USER/.docker"
 bash /home/$LOCAL_USER/.docker/main.sh -vi
 EOF
+
     chmod +x "$DOCKSTARTER_SCRIPT"
     log "DockSTARTer install script created successfully."
-fi
+fi  # Ensure this fi matches the if above
 
 # Ask if the user wants Docker standalone installed
 read -p "Do you want to install Docker standalone? y/n: " docker_choice
-if [[ "$docker_choice" == "y" ]]; then
+if [[ "$docker_choice" == "yes" ]]; then
     log "Downloading and running the Docker installation script..."
     curl -fsSL https://github.com/improvmasta/homelab/raw/refs/heads/main/installdocker | bash || { log "Docker installation failed"; exit 1; }
     log "Docker installation completed successfully."
-fi
+fi  # Ensure this fi matches the if above
 
 log "Setup script completed."
 
