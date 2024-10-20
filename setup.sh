@@ -86,6 +86,7 @@ install_docker() {
     if [[ "$docker_install" =~ ^[yY]$ ]]; then
         log "Installing Docker..."
         curl -fsSL https://github.com/improvmasta/homelab/raw/refs/heads/main/installdocker | sudo bash || { log "Failed to install Docker"; exit 1; }
+		sudo usermod -aG docker $LOCAL_USER
         log "Docker installation completed."
     else
         log "Skipping Docker installation."
