@@ -8,7 +8,7 @@ LOCAL_USER="${SUDO_USER:-$(whoami)}"  # Get the user who ran the script with sud
 
 # Log function
 log() {
-    echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" | tee -a "$LOGFILE"
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" | sudo tee -a "$LOGFILE"
 }
 
 # Check if Samba user exists
@@ -43,9 +43,23 @@ set_hostname() {
 install_packages() {
     log "Updating and installing necessary packages..."
     sudo apt-get update -y && sudo apt-get upgrade -y || { log "Failed to update packages"; exit 1; }
-    sudo apt-get install -y net-tools gcc make perl samba cifs-utils winbind curl git bzip2 tar linux-virtual linux-cloud-tools-virtual linux-tools-virtual || { log "Package installation failed"; exit 1; }
+    sudo apt-get install -y net-tools gcc make perl samba cifs-utils winbind curl git bzip2 tar || { log "Package installation failed"; exit 1; }
     sudo apt-get autoremove -y && sudo apt-get autoclean -y || { log "Autoremove failed"; exit 1; }
     log "Package installation complete."
+}
+
+# Install and configure Hyper-V guest additions
+install_hyperv_guest_additions() {
+    log "Installing and configuring Hyper-V guest additions..."
+
+    # Install necessary packages for Hyper-V guest tools
+    sudo apt-get install -y linux-virtual linux-cloud-tools-virtual linux-tools-virtual || { log "Failed to install Hyper-V guest additions packages"; exit 1; }
+
+    # Enable Hyper-V services
+    sudo systemctl enable hv-fcopy-daemon.service hv-kvp-daemon.service hv-vss-daemon.service || { log "Failed to enable Hyper-V services"; exit 1; }
+    sudo systemctl start hv-fcopy-daemon.service hv-kvp-daemon.service hv-vss-daemon.service || { log "Failed to start Hyper-V services"; exit 1; }
+
+    log "Hyper-V guest additions installed and configured."
 }
 
 # Install Docker
@@ -174,6 +188,7 @@ configure_bash_aliases() {
 # Main Execution
 set_hostname
 install_packages
+install_hyperv_guest_additions
 install_docker
 configure_samba
 configure_dns
