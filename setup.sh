@@ -115,14 +115,23 @@ configure_dns() {
 configure_bash_aliases() {
     log "Setting up Bash aliases for $LOCAL_USER..."
 
-    if [ -f "$BASH_ALIASES_FILE" ]; then
-        log "Bash alias file already exists. Checking for updates."
-    else
-        touch "$BASH_ALIASES_FILE"
-        log "Created Bash alias file."
+    # Make sure the home directory exists
+    if [ ! -d "/home/$LOCAL_USER" ]; then
+        log "User home directory /home/$LOCAL_USER does not exist. Exiting..."
+        exit 1
     fi
 
-    cat <<EOF >> "$BASH_ALIASES_FILE"
+    # Set the path for the .bash_aliases file
+    BASH_ALIASES_FILE="/home/$LOCAL_USER/.bash_aliases"
+
+    # If the file doesn't exist, create it
+    if [ ! -f "$BASH_ALIASES_FILE" ]; then
+        touch "$BASH_ALIASES_FILE" || { log "Failed to create $BASH_ALIASES_FILE"; exit 1; }
+        log "Created $BASH_ALIASES_FILE."
+    fi
+
+    # Write the aliases to the file
+    cat <<EOF > "$BASH_ALIASES_FILE"
 alias dock='cd ~/.docker/compose'
 alias dc='cd ~/.config/appdata/'
 alias dr='docker compose -f ~/.docker/compose/docker-compose.yml restart'
@@ -130,13 +139,23 @@ alias dstart='docker compose -f ~/.docker/compose/docker-compose.yml start'
 alias dstop='docker compose -f ~/.docker/compose/docker-compose.yml stop'
 alias lsl='ls -la'
 EOF
+    log "Bash aliases have been written to $BASH_ALIASES_FILE."
 
+    # Ensure the .bash_aliases file is sourced in .bashrc
     if ! grep -q "if \[ -f ~/.bash_aliases \]" "/home/$LOCAL_USER/.bashrc"; then
         echo "if [ -f ~/.bash_aliases ]; then . ~/.bash_aliases; fi" >> "/home/$LOCAL_USER/.bashrc"
+        log "Added .bash_aliases source command to /home/$LOCAL_USER/.bashrc."
+    else
+        log ".bash_aliases source command already exists in /home/$LOCAL_USER/.bashrc."
     fi
 
-    log "Bash aliases set up successfully."
+    # Adjust ownership and permissions
+    chown "$LOCAL_USER:$LOCAL_USER" "$BASH_ALIASES_FILE"
+    chmod 644 "$BASH_ALIASES_FILE"
+
+    log "Bash aliases setup completed for $LOCAL_USER."
 }
+
 
 # Create or update the update script
 create_update_script() {
