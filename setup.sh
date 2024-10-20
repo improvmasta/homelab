@@ -124,7 +124,7 @@ configure_bash_aliases() {
     } > "$BASH_ALIASES_FILE"
 
     if ! grep -q "if \[ -f ~/.bash_aliases \]" "/home/$LOCAL_USER/.bashrc"; then
-        echo "if [ -f ~/.bash_aliases ]; then . ~/.bash_aliases; fi" >> "/home/$LOCAL_USER/.bashrc"
+        echo "if [ -f ~/.bash_aliases ]; then . ~/.bash_aliases; fi" >> "/home/$LOCAL_USER/.bashrc
         log "Added .bash_aliases source command to /home/$LOCAL_USER/.bashrc."
     fi
 
@@ -151,8 +151,17 @@ EOF
     log "Update script created or updated successfully."
 }
 
-create_dockstarter_script() {
-    log "Creating or updating DockSTARTer install script for $LOCAL_USER..."
+# Main Execution
+set_hostname
+install_packages
+configure_samba
+configure_dns
+configure_bash_aliases
+create_update_script
+
+# Ask if the user wants to create the DockSTARTer install script
+read -p "Do you want to create a DockSTARTer install script? (yes/no): " dockstarter_choice
+if [[ "$dockstarter_choice" == "yes" ]]; then
     DOCKSTARTER_SCRIPT="/home/$LOCAL_USER/installds"
 
     cat <<EOF > "$DOCKSTARTER_SCRIPT"
@@ -162,16 +171,19 @@ bash /home/$LOCAL_USER/.docker/main.sh -vi
 EOF
 
     chmod +x "$DOCKSTARTER_SCRIPT"
-    log "DockSTARTer install script created or updated successfully."
-}
+    log "DockSTARTer install script created successfully."
+fi
 
-# Main Execution
-set_hostname
-install_packages
-configure_samba
-configure_dns
-configure_bash_aliases
-create_update_script
-create_dockstarter_script
+# Ask if the user wants Docker standalone installed
+read -p "Do you want to install Docker standalone? (yes/no): " docker_choice
+if [[ "$docker_choice" == "yes" ]]; then
+    log "Downloading and running the Docker installation script..."
+    curl -fsSL https://github.com/improvmasta/homelab/raw/refs/heads/main/installdocker | bash || { log "Docker installation failed"; exit 1; }
+    log "Docker installation completed successfully."
+fi
 
 log "Setup script completed."
+
+# Inform the user to source their .bashrc
+echo "To load the new aliases, please run:"
+echo "source /home/$LOCAL_USER/.bashrc"
