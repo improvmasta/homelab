@@ -46,7 +46,6 @@ install_packages() {
 configure_samba() {
     log "Configuring Samba for $LOCAL_USER..."
 
-    # Check if Samba share configuration already exists
     if ! grep -q "\[$LOCAL_USER\]" /etc/samba/smb.conf; then
         cat <<EOF >> /etc/samba/smb.conf
 [$LOCAL_USER]
@@ -66,17 +65,15 @@ EOF
 
     log "Mounting network shares..."
 
-    # Store credentials securely in /etc/samba/credentials_<username>
     CREDENTIALS_FILE="/etc/samba/credentials_$LOCAL_USER"
     echo "username=$SMB_USER" > $CREDENTIALS_FILE
     echo "password=$SMB_PASSWORD" >> $CREDENTIALS_FILE
-    chmod 600 $CREDENTIALS_FILE  # Secure the file
+    chmod 600 $CREDENTIALS_FILE
 
     for SHARE in "${SHARES[@]}"; do
         MOUNT_POINT="/media/$SHARE"
         mkdir -p "$MOUNT_POINT"
 
-        # Check if the mount point entry already exists in /etc/fstab
         if ! grep -q "//$SERVER/$SHARE" /etc/fstab; then
             echo "//$SERVER/$SHARE $MOUNT_POINT cifs credentials=$CREDENTIALS_FILE,iocharset=utf8,file_mode=0777,dir_mode=0777 0 0" >> /etc/fstab
             log "Added entry for $SHARE to /etc/fstab."
@@ -96,7 +93,6 @@ configure_dns() {
     if [[ "$pihole_choice" == "yes" ]]; then
         read -p "Enter the static IP of the DNS server (e.g., 10.1.1.1): " static_ip
 
-        # Check if the DNS is already configured
         if grep -q "DNS=$static_ip" /etc/systemd/resolved.conf; then
             log "DNS settings are already configured with IP: $static_ip"
         else
@@ -106,7 +102,6 @@ configure_dns() {
             echo "Cache=no" >> /etc/systemd/resolved.conf
             echo "DNSStubListener=no" >> /etc/systemd/resolved.conf
 
-            # Restart systemd-resolved service
             systemctl restart systemd-resolved || { log "Failed to restart systemd-resolved"; exit 1; }
 
             log "DNS settings configured with static IP: $static_ip"
@@ -120,7 +115,6 @@ configure_dns() {
 configure_bash_aliases() {
     log "Setting up Bash aliases for $LOCAL_USER..."
 
-    # Check if the alias file already exists
     if [ -f "$BASH_ALIASES_FILE" ]; then
         log "Bash alias file already exists. Checking for updates."
     else
@@ -128,7 +122,6 @@ configure_bash_aliases() {
         log "Created Bash alias file."
     fi
 
-    # Add aliases to .bash_aliases
     cat <<EOF >> "$BASH_ALIASES_FILE"
 alias dock='cd ~/.docker/compose'
 alias dc='cd ~/.config/appdata/'
@@ -138,7 +131,6 @@ alias dstop='docker compose -f ~/.docker/compose/docker-compose.yml stop'
 alias lsl='ls -la'
 EOF
 
-    # Ensure the .bashrc file sources the .bash_aliases file
     if ! grep -q "if \[ -f ~/.bash_aliases \]" "/home/$LOCAL_USER/.bashrc"; then
         echo "if [ -f ~/.bash_aliases ]; then . ~/.bash_aliases; fi" >> "/home/$LOCAL_USER/.bashrc"
     fi
@@ -151,10 +143,7 @@ create_update_script() {
     log "Creating or updating update script for $LOCAL_USER..."
     UPDATE_SCRIPT="/home/$LOCAL_USER/update"
 
-    # Check if the update script already exists
-    if [ -f "$UPDATE_SCRIPT" ]; then
-        # Compare the existing script with the new content
-        NEW_CONTENT=$(cat <<EOF
+    NEW_CONTENT=$(cat <<EOF
 #!/bin/bash
 sudo apt-get update -y && sudo apt-get upgrade -y
 sudo apt-get autoremove -y && sudo apt-get autoclean -y
@@ -163,21 +152,13 @@ cd ~/.config/appdata/plex/Library/'Application Support'/'Plex Media Server'/Logs
 ls | grep -v '\\.log\$' | xargs rm
 EOF
 )
-        if [ "$NEW_CONTENT" != "$(cat $UPDATE_SCRIPT)" ]; then
-            echo "$NEW_CONTENT" > $UPDATE_SCRIPT
-            log "Update script updated successfully."
-        else
-            log "Update script is already up to date."
-        fi
-    else
-        echo "#!/bin/bash" > $UPDATE_SCRIPT
-        echo "sudo apt-get update -y && sudo apt-get upgrade -y" >> $UPDATE_SCRIPT
-        echo "sudo apt-get autoremove -y && sudo apt-get autoclean -y" >> $UPDATE_SCRIPT
-        echo "sudo journalctl --vacuum-time=3d" >> $UPDATE_SCRIPT
-        echo "cd ~/.config/appdata/plex/Library/'Application Support'/'Plex Media Server'/Logs" >> $UPDATE_SCRIPT
-        echo "ls | grep -v '\\.log\$' | xargs rm" >> $UPDATE_SCRIPT
+
+    if [ ! -f "$UPDATE_SCRIPT" ] || [ "$NEW_CONTENT" != "$(cat $UPDATE_SCRIPT)" ]; then
+        echo "$NEW_CONTENT" > $UPDATE_SCRIPT
         chmod +x $UPDATE_SCRIPT
-        log "Update script created successfully."
+        log "Update script created or updated successfully."
+    else
+        log "Update script is already up to date."
     fi
 }
 
@@ -186,16 +167,29 @@ create_dockstarter_script() {
     log "Creating or updating DockSTARTer install script for $LOCAL_USER..."
     DOCKSTARTER_SCRIPT="/home/$LOCAL_USER/installds"
 
-    # Check if the DockSTARTer script already exists
-    if [ -f "$DOCKSTARTER_SCRIPT" ]; then
-        # Compare the existing script with the new content
-        NEW_CONTENT=$(cat <<EOF
+    NEW_CONTENT=$(cat <<EOF
 #!/bin/bash
 git clone https://github.com/GhostWriters/DockSTARTer "/home/$LOCAL_USER/.docker"
 bash /home/$LOCAL_USER/.docker/main.sh -vi
 EOF
 )
-        if [ "$NEW_CONTENT" != "$(cat $DOCKSTARTER_SCRIPT)" ]; then
-            echo "$NEW_CONTENT" > $DOCKSTARTER_SCRIPT
-            log "DockSTARTer install script updated successfully."
-        else
+
+    if [ ! -f "$DOCKSTARTER_SCRIPT" ] || [ "$NEW_CONTENT" != "$(cat $DOCKSTARTER_SCRIPT)" ]; then
+        echo "$NEW_CONTENT" > $DOCKSTARTER_SCRIPT
+        chmod +x $DOCKSTARTER_SCRIPT
+        log "DockSTARTer install script created or updated successfully."
+    else
+        log "DockSTARTer install script is already up to date."
+    fi
+}
+
+# Main Execution
+set_hostname
+install_packages
+configure_samba
+configure_dns
+configure_bash_aliases
+create_update_script
+create_dockstarter_script
+
+log "Setup script completed."
