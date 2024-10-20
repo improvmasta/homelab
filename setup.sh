@@ -48,6 +48,18 @@ install_packages() {
     log "Package installation complete."
 }
 
+# Install Docker
+install_docker() {
+    read -p "Do you want to install Docker? (y/n): " docker_install
+    if [[ "$docker_install" =~ ^[yY]$ ]]; then
+        log "Installing Docker..."
+        curl -fsSL https://github.com/improvmasta/homelab/raw/refs/heads/main/installdocker | sudo bash || { log "Failed to install Docker"; exit 1; }
+        log "Docker installation completed."
+    else
+        log "Skipping Docker installation."
+    fi
+}
+
 # Configure Samba and mount network shares
 configure_samba() {
     log "Configuring Samba for $LOCAL_USER..."
@@ -162,6 +174,7 @@ configure_bash_aliases() {
 # Main Execution
 set_hostname
 install_packages
+install_docker
 configure_samba
 configure_dns
 create_update_script
