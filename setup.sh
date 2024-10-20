@@ -55,9 +55,27 @@ install_hyperv_guest_additions() {
     # Install necessary packages for Hyper-V guest tools
     sudo apt-get install -y linux-virtual linux-cloud-tools-virtual linux-tools-virtual || { log "Failed to install Hyper-V guest additions packages"; exit 1; }
 
-    # Enable Hyper-V services
-    sudo systemctl enable hv-fcopy-daemon.service hv-kvp-daemon.service hv-vss-daemon.service || { log "Failed to enable Hyper-V services"; exit 1; }
-    sudo systemctl start hv-fcopy-daemon.service hv-kvp-daemon.service hv-vss-daemon.service || { log "Failed to start Hyper-V services"; exit 1; }
+    # Function to add a module if it doesn't already exist
+    add_module_if_missing() {
+        MODULE=$1
+        if ! grep -q "^$MODULE" /etc/initramfs-tools/modules; then
+            echo "$MODULE" | sudo tee -a /etc/initramfs-tools/modules
+            log "Added $MODULE to /etc/initramfs-tools/modules."
+        else
+            log "$MODULE is already present in /etc/initramfs-tools/modules."
+        fi
+    }
+
+    # Add Hyper-V modules if not already configured
+    log "Checking and adding Hyper-V modules to initramfs if needed..."
+    add_module_if_missing "hv_vmbus"
+    add_module_if_missing "hv_storvsc"
+    add_module_if_missing "hv_blkvsc"
+    add_module_if_missing "hv_netvsc"
+
+    # Regenerate initramfs to include the new modules
+    log "Regenerating initramfs..."
+    sudo update-initramfs -u || { log "Failed to regenerate initramfs"; exit 1; }
 
     log "Hyper-V guest additions installed and configured."
 }
