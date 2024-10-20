@@ -16,21 +16,27 @@ log() {
     echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" | tee -a "$LOGFILE"
 }
 
+# Gather user input
+collect_user_input() {
+    read -p "Enter the desired hostname for this server: " NEW_HOSTNAME
+    read -p "Enter Samba username: " SMB_USER
+    read -s -p "Enter Samba password: " SMB_PASSWORD
+    echo ""
+    read -p "Is this system going to be configured as a Pi-hole? (yes/no): " pihole_choice
+    if [[ "$pihole_choice" == "yes" ]]; then
+        read -p "Enter the static IP of the DNS server (e.g., 10.1.1.1): " static_ip
+    fi
+    read -p "Do you want to create a DockSTARTer install script? (y/n): " dockstarter_choice
+    read -p "Do you want to install Docker standalone? (y/n): " docker_choice
+}
+
 # Check if Samba user exists
 samba_user_exists() {
     pdbedit -L | grep -q "$1"
 }
 
-# Collect Samba information if not already configured
-collect_samba_info() {
-    read -p "Enter Samba username: " SMB_USER
-    read -s -p "Enter Samba password: " SMB_PASSWORD
-    echo ""
-}
-
 # Set the new hostname
 set_hostname() {
-    read -p "Enter the desired hostname for this server: " NEW_HOSTNAME
     log "Setting hostname to $NEW_HOSTNAME..."
     CURRENT_HOSTNAME=$(hostname)
     echo "$NEW_HOSTNAME" > /etc/hostname
@@ -53,8 +59,6 @@ configure_samba() {
     log "Configuring Samba for $LOCAL_USER..."
 
     if ! samba_user_exists "$LOCAL_USER"; then
-        collect_samba_info
-
         cat <<EOF >> /etc/samba/smb.conf
 [$SMB_USER]
     path = /home/$LOCAL_USER
@@ -97,11 +101,7 @@ EOF
 
 # Configure DNS if setting up as Pi-hole
 configure_dns() {
-    read -p "Is this system going to be configured as a Pi-hole? (yes/no): " pihole_choice
-
     if [[ "$pihole_choice" == "yes" ]]; then
-        read -p "Enter the static IP of the DNS server (e.g., 10.1.1.1): " static_ip
-
         if grep -q "DNS=$static_ip" /etc/systemd/resolved.conf; then
             log "DNS settings are already configured with IP: $static_ip"
         else
@@ -172,20 +172,9 @@ EOF
     fi
 }
 
-# Main Execution
-set_hostname
-install_packages
-configure_samba
-configure_dns
-configure_bash_aliases
-create_update_script
-
-bash
-
-# Ask if the user wants to create the DockSTARTer install script
-read -p "Do you want to create a DockSTARTer install script? y/n: " dockstarter_choice
-if [[ "$dockstarter_choice" == "y" ]]; then
-    # Create the DockSTARTER_SCRIPT
+# Install DockSTARTer
+install_dockstarter() {
+    log "Creating DockSTARTer install script for $LOCAL_USER..."
     DOCKSTARTER_SCRIPT="/home/$LOCAL_USER/installds"
 
     cat <<EOF > "$DOCKSTARTER_SCRIPT"
@@ -196,14 +185,32 @@ EOF
 
     chmod +x "$DOCKSTARTER_SCRIPT"
     log "DockSTARTer install script created successfully."
-fi  # End of DockSTARTER installation choice
+}
 
-# Ask if the user wants Docker standalone installed
-read -p "Do you want to install Docker standalone? y/n: " docker_choice
-if [[ "$docker_choice" == "yes" ]]; then
+# Install Docker standalone
+install_docker() {
     log "Downloading and running the Docker installation script..."
     curl -fsSL https://github.com/improvmasta/homelab/raw/refs/heads/main/installdocker | bash || { log "Docker installation failed"; exit 1; }
     log "Docker installation completed successfully."
+}
+
+# Main Execution
+collect_user_input
+set_hostname
+install_packages
+configure_samba
+configure_dns
+configure_bash_aliases
+create_update_script
+
+# Create DockSTARTer install script if requested
+if [[ "$dockstarter_choice" == "y" ]]; then
+    install_dockstarter
+fi  # End of DockSTARTER installation choice
+
+# Install Docker if requested
+if [[ "$docker_choice" == "yes" ]]; then
+    install_docker
 fi  # End of Docker installation choice
 
 log "Setup script completed."
