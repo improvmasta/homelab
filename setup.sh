@@ -22,10 +22,15 @@ samba_user_exists() {
     pdbedit -L | grep -q "$1"
 }
 
-# Collect Samba information if not already configured
+# Check if a Samba share for the user's home directory exists
+samba_home_share_exists() {
+    grep -q "[$LOCAL_USER]" /etc/samba/smb.conf
+}
+
+# Collect Samba information
 collect_samba_info() {
-    read -p "Enter Samba username: " SMB_USER
-    read -s -p "Enter Samba password: " SMB_PASSWORD
+    read -p "Enter Samba username for home directory share: " SMB_USER
+    read -s -p "Enter Samba password for home directory share: " SMB_PASSWORD
     echo ""
 }
 
@@ -65,11 +70,11 @@ install_packages() {
     log "Package installation complete."
 }
 
-# Configure Samba and mount network shares
-configure_samba() {
-    log "Configuring Samba for $LOCAL_USER..."
-    
-    if ! samba_user_exists "$LOCAL_USER"; then
+# Configure Samba for user's home directory
+configure_home_samba() {
+    log "Configuring Samba for the home directory of $LOCAL_USER..."
+
+    if ! samba_home_share_exists; then
         collect_samba_info
         cat <<EOF >> /etc/samba/smb.conf
 [$SMB_USER]
@@ -77,8 +82,31 @@ configure_samba() {
     read only = no
     browsable = yes
 EOF
-        log "Samba configuration added for $SMB_USER."
+        log "Samba configuration added for home directory share: $SMB_USER."
         (echo "$SMB_PASSWORD"; echo "$SMB_PASSWORD") | smbpasswd -s -a "$SMB_USER" || { log "Failed to set Samba password"; exit 1; }
+    else
+        log "Samba share for home directory already exists."
+    fi
+
+    systemctl restart smbd || { log "Failed to restart Samba"; exit 1; }
+    ufw allow samba || { log "Failed to configure firewall for Samba"; exit 1; }
+    log "Samba configured successfully."
+}
+
+# Configure Samba and mount network shares
+configure_samba() {
+    log "Configuring Samba for shares..."
+    
+    if ! samba_user_exists "$LOCAL_USER"; then
+        collect_samba_info
+        cat <<EOF >> /etc/samba/smb.conf
+[$LOCAL_USER]
+    path = /home/$LOCAL_USER
+    read only = no
+    browsable = yes
+EOF
+        log "Samba configuration added for $LOCAL_USER."
+        (echo "$SMB_PASSWORD"; echo "$SMB_PASSWORD") | smbpasswd -s -a "$LOCAL_USER" || { log "Failed to set Samba password"; exit 1; }
     else
         log "Samba configuration for $LOCAL_USER already exists."
     fi
@@ -206,6 +234,7 @@ else
     configure_samba
 fi
 
+configure_home_samba  # Check and create home directory share if needed
 configure_dns
 create_update_script
 configure_bash_aliases
