@@ -1,8 +1,8 @@
-1.  Create VM, set to boot from ubuntu server ISO image.  Do not boot until setting Network to Bridged, copying MAC address and creating Static lease for planned IP.
-
-1.  Install ubuntu server, ensure SSH is installed/enabled
-
-2.  SSH into server and execute these commands:
+1.  Create VM, set to boot from ubuntu server ISO image
+2.  Static IP is recommended - I set a static lease on my router for the MAC address of the new VM
+3.  Secure Boot must be OFF
+4.  Install Ubuntu Server.  Choose the option Install SSH during ubuntu setup
+5.  SSH into server and execute these commands:
 	$ wget https://github.com/improvmasta/homelab/raw/refs/heads/main/setup.sh
 	$ sudo chmod +x setup.sh
-	$ sudo ./setup.sh
+	$ ./setup.sh
