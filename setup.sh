@@ -5,6 +5,7 @@ SERVER="10.1.1.3"
 SHARES=("d" "e" "f" "v")  # Add more shares if needed
 LOGFILE="/var/log/setup.log"
 BASH_ALIASES_FILE="/home/$LOCAL_USER/.bash_aliases"
+LOCAL_USER="${SUDO_USER:-$(whoami)}"  # Get the user who ran the script with sudo or the current user if not run with sudo
 
 # Ensure script is run as root
 if [ "$(id -u)" -ne 0 ]; then
@@ -17,7 +18,6 @@ log() {
 }
 
 # Collect user input
-read -p "Enter your local username: " LOCAL_USER
 read -p "Enter Samba username: " SMB_USER
 read -s -p "Enter Samba password: " SMB_PASSWORD
 echo ""
