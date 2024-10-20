@@ -110,6 +110,7 @@ configure_dns() {
     fi
 }
 
+# Configure Bash aliases
 configure_bash_aliases() {
     log "Setting up Bash aliases for $LOCAL_USER..."
     BASH_ALIASES_FILE="/home/$LOCAL_USER/.bash_aliases"
@@ -123,8 +124,9 @@ configure_bash_aliases() {
         echo "alias lsl='ls -la'"
     } > "$BASH_ALIASES_FILE"
 
+    # Check and add source command in .bashrc
     if ! grep -q "if \[ -f ~/.bash_aliases \]" "/home/$LOCAL_USER/.bashrc"; then
-        echo "if [ -f ~/.bash_aliases ]; then . ~/.bash_aliases; fi" >> "/home/$LOCAL_USER/.bashrc
+        echo "if [ -f ~/.bash_aliases ]; then . ~/.bash_aliases; fi" >> "/home/$LOCAL_USER/.bashrc"
         log "Added .bash_aliases source command to /home/$LOCAL_USER/.bashrc."
     fi
 
@@ -132,23 +134,6 @@ configure_bash_aliases() {
     chmod 644 "$BASH_ALIASES_FILE"
 
     log "Bash aliases setup completed for $LOCAL_USER."
-}
-
-create_update_script() {
-    log "Creating or updating update script for $LOCAL_USER..."
-    UPDATE_SCRIPT="/home/$LOCAL_USER/update"
-
-    cat <<EOF > "$UPDATE_SCRIPT"
-#!/bin/bash
-sudo apt-get update -y && sudo apt-get upgrade -y
-sudo apt-get autoremove -y && sudo apt-get autoclean -y
-sudo journalctl --vacuum-time=3d
-cd ~/.config/appdata/plex/Library/'Application Support'/'Plex Media Server'/Logs || exit
-ls | grep -v '\\.log\$' | xargs rm
-EOF
-
-    chmod +x "$UPDATE_SCRIPT"
-    log "Update script created or updated successfully."
 }
 
 # Main Execution
