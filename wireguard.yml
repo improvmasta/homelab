@@ -1,0 +1,117 @@
+version: '3'
+
+services:
+  duplicati:
+    container_name: duplicati
+    image: lscr.io/linuxserver/duplicati:latest
+    hostname: DockSTARTer
+    environment:
+      PGID: "1000"
+      PUID: "1000"
+      TZ: America/Chicago
+    ports:
+      - "8200:8200"
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /home/lindsay/.config/appdata/backups:/backups
+      - /home/lindsay/.config/appdata:/source
+      - /home/lindsay/storage:/storage
+    restart: unless-stopped
+
+  pihole:
+    container_name: pihole
+    image: pihole/pihole:latest
+    hostname: pihole
+    environment:
+      DNS1: 1.1.1.1
+      DNS2: 8.8.8.8
+      ServerIP: 0.0.0.0
+      TZ: America/Chicago
+      WEBPASSWORD: ""
+    ports:
+      - "446:443"
+      - "8008:80"
+      - "53:53/tcp"
+      - "53:53/udp"
+      - "67:67/udp"
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /home/lindsay/.config/appdata/pihole/dnsmasq.d:/etc/dnsmasq.d
+      - /home/lindsay/.config/appdata/pihole/pihole:/etc/pihole
+      - /home/lindsay/storage:/storage
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+
+  traefik:
+    container_name: traefik
+    image: traefik:latest
+    hostname: DockSTARTer
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+    ports:
+      - "443:443"
+      - "8080:8080"
+      - "80:80"
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /home/lindsay/.config/appdata/traefik:/etc/traefik
+      - /home/lindsay/storage:/storage
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    restart: unless-stopped
+
+  watchtower:
+    container_name: watchtower
+    image: ghcr.io/containrrr/watchtower:latest
+    environment:
+      WATCHTOWER_CLEANUP: "true"
+      WATCHTOWER_SCHEDULE: "0 0 4 * * *"
+      TZ: America/Chicago
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /home/lindsay/storage:/storage
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: unless-stopped
+
+  wireguard:
+    container_name: wireguard
+    image: lscr.io/linuxserver/wireguard:latest
+    hostname: wireguard
+    environment:
+      ALLOWEDIPS: 0.0.0.0/0
+      INTERNAL_SUBNET: 10.13.13.0
+      SERVERURL: jupiterns.org
+      PEERS: s22,chromebook,laptop
+      PEERDNS: auto
+      PGID: "1000"
+      PUID: "1000"
+      TZ: America/Chicago
+      SERVERPORT: "51820"
+    ports:
+      - "51820:51820/udp"
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /lib/modules:/lib/modules
+      - /home/lindsay/.config/appdata/wireguard:/config
+      - /home/lindsay/storage:/storage
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    sysctls:
+      net.ipv4.conf.all.src_valid_mark: "1"
+
+  whoami:
+    image: traefik/whoami
+    container_name: simple-service
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.whoami.rule=Host(`jupiterns.org`)"
+      - "traefik.http.routers.whoami.entrypoints=web"
+
+networks:
+  default:
+    name: compose_default
