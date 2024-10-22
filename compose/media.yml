@@ -6,8 +6,6 @@ services:
       PGID: "1000"
       PUID: "1000"
       TZ: America/New_York
-    networks:
-      default: null
     restart: unless-stopped
     ports:
       - "8200:8200"
@@ -27,8 +25,6 @@ services:
       PUID: "1000"
       TZ: America/New_York
       VERSION: docker
-    networks:
-      default: null
     restart: unless-stopped
     ports:
       - "1900:1900/udp"
@@ -52,8 +48,6 @@ services:
       PGID: "1000"
       PUID: "1000"
       TZ: America/New_York
-    networks:
-      default: null
     restart: unless-stopped
     ports:
       - "9696:9696"
@@ -71,8 +65,6 @@ services:
       PUID: "1000"
       TZ: America/New_York
       WEBUI_PORT: "25000"
-    networks:
-      default: null
     restart: unless-stopped
     ports:
       - "51413:51413/tcp"
@@ -94,8 +86,6 @@ services:
       PGID: "1000"
       PUID: "1000"
       TZ: America/New_York
-    networks:
-      default: null
     restart: unless-stopped
     ports:
       - "7878:7878"
@@ -112,8 +102,6 @@ services:
       PGID: "1000"
       PUID: "1000"
       TZ: America/New_York
-    networks:
-      default: null
     restart: unless-stopped
     ports:
       - "8989:8989"
@@ -141,8 +129,6 @@ services:
       UN_RADARR_0_URL: http://radarr:7878
       UN_SONARR_0_API_KEY: ""
       UN_SONARR_0_URL: http://sonarr:8989
-    networks:
-      default: null
     restart: unless-stopped
     volumes:
       - /media/d:/media/d:rw
