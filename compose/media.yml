@@ -3,27 +3,23 @@ services:
     image: lscr.io/linuxserver/duplicati:latest
     container_name: duplicati
     environment: 
-      PGID: "1000"
-      PUID: "1000"
-      TZ: America/New_York
+      TZ: "${TZ}"
     restart: unless-stopped
     ports:
       - "8200:8200"
     volumes:
       - /etc:/etc-backup:rw
       - /media/f:/media/f:rw
-      - /home/lindsay:/home/lindsay:rw
-      - /home/lindsay/.config/appdata/duplicati:/config
-      - /home/lindsay/storage:/storage
+      - /home/${USERNAME}:/home/${USERNAME}:rw
+      - ${APPDATA_PATH}/duplicati:/config
+      - /home/${USERNAME}/storage:/storage
 
   plex:
     image: lscr.io/linuxserver/plex:latest
     container_name: plex
     environment: 
-      PGID: "1000"
       PLEX_CLAIM: https://plex.tv/claim
-      PUID: "1000"
-      TZ: America/New_York
+      TZ: "${TZ}"
       VERSION: docker
     restart: unless-stopped
     ports:
@@ -38,32 +34,28 @@ services:
       - /media/d:/media/d:rw
       - /media/e:/media/e:rw
       - /dev/shm:/ramdisk:rw
-      - /home/lindsay/.config/appdata/plex:/config
-      - /home/lindsay/storage:/storage
+      - ${APPDATA_PATH}/plex:/config
+      - /home/${USERNAME}/storage:/storage
 
   prowlarr:
     image: lscr.io/linuxserver/prowlarr:latest
     container_name: prowlarr
     environment: 
-      PGID: "1000"
-      PUID: "1000"
-      TZ: America/New_York
+      TZ: "${TZ}"
     restart: unless-stopped
     ports:
       - "9696:9696"
     volumes:
       - /media/d:/media/d:rw
       - /media/e:/media/e:rw
-      - /home/lindsay/.config/appdata/prowlarr:/config
-      - /home/lindsay/storage:/storage
+      - ${APPDATA_PATH}/prowlarr:/config
+      - /home/${USERNAME}/storage:/storage
 
   qbittorrent:
     image: lscr.io/linuxserver/qbittorrent:latest
     container_name: qbittorrent
     environment: 
-      PGID: "1000"
-      PUID: "1000"
-      TZ: America/New_York
+      TZ: "${TZ}"
       WEBUI_PORT: "25000"
     restart: unless-stopped
     ports:
@@ -76,48 +68,42 @@ services:
       - /media/d:/media/d:rw
       - /media/e:/media/e:rw
       - /media/f:/media/f:rw
-      - /home/lindsay/.config/appdata/qbittorrent:/config
-      - /home/lindsay/storage:/storage
+      - ${APPDATA_PATH}/qbittorrent:/config
+      - /home/${USERNAME}/storage:/storage
 
   radarr:
     image: lscr.io/linuxserver/radarr:latest
     container_name: radarr
     environment: 
-      PGID: "1000"
-      PUID: "1000"
-      TZ: America/New_York
+      TZ: "${TZ}"
     restart: unless-stopped
     ports:
       - "7878:7878"
     volumes:
       - /media/d:/media/d:rw
       - /media/e:/media/e:rw
-      - /home/lindsay/.config/appdata/radarr:/config
-      - /home/lindsay/storage:/storage
+      - ${APPDATA_PATH}/radarr:/config
+      - /home/${USERNAME}/storage:/storage
 
   sonarr:
     image: lscr.io/linuxserver/sonarr:latest
     container_name: sonarr
     environment: 
-      PGID: "1000"
-      PUID: "1000"
-      TZ: America/New_York
+      TZ: "${TZ}"
     restart: unless-stopped
     ports:
       - "8989:8989"
     volumes:
       - /media/d:/media/d:rw
       - /media/e:/media/e:rw
-      - /home/lindsay/.config/appdata/sonarr:/config
-      - /home/lindsay/storage:/storage
+      - ${APPDATA_PATH}/sonarr:/config
+      - /home/${USERNAME}/storage:/storage
 
   unpackerr:
     image: ghcr.io/hotio/unpackerr:latest
     container_name: unpackerr
     environment: 
-      PGID: "1000"
-      PUID: "1000"
-      TZ: America/New_York
+      TZ: "${TZ}"
       UN_FOLDER_0_DELETE_AFTER: "0"
       UN_FOLDER_0_DELETE_ORIGINAL: "false"
       UN_FOLDER_0_MOVE_BACK: "true"
@@ -133,8 +119,8 @@ services:
     volumes:
       - /media/d:/media/d:rw
       - /media/e:/media/e:rw
-      - /home/lindsay/.config/appdata/unpackerr:/config
-      - /home/lindsay/storage:/storage
+      - ${APPDATA_PATH}/unpackerr:/config
+      - /home/${USERNAME}/storage:/storage
 
   fileflows:
     image: revenz/fileflows
@@ -143,8 +129,8 @@ services:
     ports:
       - "19200:5000"
     volumes:
-      - /home/lindsay/.config/appdata/fileflows:/app/Data:rw
-      - /home/lindsay/storage:/storage:rw
+      - ${APPDATA_PATH}/fileflows:/app/Data:rw
+      - /home/${USERNAME}/storage:/storage:rw
       - /media/d:/media/d:rw
       - /media/e:/media/e:rw
       - /media/f:/media/f:rw
