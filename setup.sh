@@ -184,12 +184,16 @@ configure_bash_aliases() {
     BASH_ALIASES_FILE="/home/$LOCAL_USER/.bash_aliases"
 
     {
-        echo "alias dock='cd ~/.docker/compose'"
+        echo "alias ..='cd ..'"
+		echo "alias ...='cd ../..'"
+		echo "alias dock='cd ~/.docker/compose'"
         echo "alias dc='cd ~/.config/appdata/'"
+		echo "alias dup='docker compose -f ~/.docker/compose/docker-compose.yml up -d'"
+		echo "alias ddown='docker compose -f ~/.docker/compose/docker-compose.yml down'"
         echo "alias dr='docker compose -f ~/.docker/compose/docker-compose.yml restart'"
         echo "alias dstart='docker compose -f ~/.docker/compose/docker-compose.yml start'"
         echo "alias dstop='docker compose -f ~/.docker/compose/docker-compose.yml stop'"
-        echo "alias lsl='ls -la'"
+        echo "alias ls='ls -lah'"
     } | sudo tee "$BASH_ALIASES_FILE" > /dev/null
 
     # Check and add source command in .bashrc
