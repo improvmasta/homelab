@@ -193,7 +193,7 @@ configure_bash_aliases() {
         echo "alias dr='docker compose -f ~/.docker/compose/docker-compose.yml restart'"
         echo "alias dstart='docker compose -f ~/.docker/compose/docker-compose.yml start'"
         echo "alias dstop='docker compose -f ~/.docker/compose/docker-compose.yml stop'"
-        echo "alias ls='ls -lah'"
+        echo "alias ls='ls --color -Flah'"
 		echo "alias update='~/update'"
     } | sudo tee "$BASH_ALIASES_FILE" > /dev/null
 
