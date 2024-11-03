@@ -8,10 +8,15 @@ log() {
     echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" >> "$SETUP_LOG"
 }
 
+# Function to prompt user for confirmation
+prompt_to_proceed() {
+    local step_message="$1"
+    read -p "$step_message [y/n]: " response
+    [[ "$response" =~ ^[Yy]$ ]]
+}
+
 set_hostname() {
     log "Checking if hostname change is required..."
-
-    # Get user input for hostname change and new hostname
     local change_hostname="$1"
     local NEW_HOSTNAME="$2"
 
@@ -19,24 +24,10 @@ set_hostname() {
         log "Setting hostname to $NEW_HOSTNAME..."
         CURRENT_HOSTNAME=$(hostname)
 
-        # Update /etc/hostname
         echo "$NEW_HOSTNAME" | sudo tee /etc/hostname > /dev/null
-        
-        # Update /etc/hosts
-        if sudo sed -i "s/$CURRENT_HOSTNAME/$NEW_HOSTNAME/g" /etc/hosts; then
-            log "Updated /etc/hosts successfully."
-        else
-            log "Failed to update /etc/hosts."
-            exit 1
-        fi
-        
-        # Set the new hostname
-        if sudo hostnamectl set-hostname "$NEW_HOSTNAME"; then
-            log "Hostname has been changed to $NEW_HOSTNAME."
-        else
-            log "Failed to set hostname."
-            exit 1
-        fi
+        sudo sed -i "s/$CURRENT_HOSTNAME/$NEW_HOSTNAME/g" /etc/hosts
+        sudo hostnamectl set-hostname "$NEW_HOSTNAME"
+        log "Hostname has been changed to $NEW_HOSTNAME."
     else
         log "Hostname change skipped."
     fi
@@ -44,132 +35,43 @@ set_hostname() {
 
 install_packages() {
     log "Updating and installing necessary packages..."
-    sudo apt-get update -y && sudo apt-get upgrade -y || { log "Failed to update packages"; exit 1; }
-    sudo apt-get install -y net-tools gcc make perl samba cifs-utils winbind curl git bzip2 tar || { log "Package installation failed"; exit 1; }
-    sudo apt-get autoremove -y && sudo apt-get autoclean -y || { log "Autoremove failed"; exit 1; }
+    if ! sudo apt-get update -y && sudo apt-get upgrade -y; then
+        log "Failed to update packages"
+        exit 1
+    fi
+    
+    if ! sudo apt-get install -y net-tools gcc make perl samba cifs-utils winbind curl git bzip2 tar; then
+        log "Package installation failed"
+        exit 1
+    fi
+    
+    sudo apt-get autoremove -y && sudo apt-get autoclean -y
     log "Package installation complete."
-}
-
-setup_samba_shares() {
-    local secrets_file="/etc/samba_credentials"
-    local server_ip samba_user samba_pass share_name mount_point
-    local -a shares=()  # Array to hold all share names
-
-    # Function to log messages to the general setup log file
-    log_message() {
-        local message="$1"
-        echo "$(date '+%Y-%m-%d %H:%M:%S') - $message" | sudo tee -a "$SETUP_LOG" > /dev/null
-    }
-
-    # Ensure script is run with necessary privileges
-    if [[ $EUID -ne 0 ]]; then
-        echo "Please run this script with sudo or as root."
-        return 1
-    fi
-
-    # Prompt for the Samba server IP or hostname
-    read -p "Enter the file server hostname/IP: " server_ip
-    if [[ -z "$server_ip" ]]; then
-        log_message "No server hostname/IP entered. Exiting Samba setup..."
-        echo "No server hostname/IP entered. Exiting Samba setup..."
-        return 1
-    fi
-
-    # Prompt for Samba credentials
-    read -p "Enter the Samba username: " samba_user
-    read -sp "Enter the Samba password: " samba_pass
-    echo
-
-    # Create or update the secrets file with proper permissions
-    {
-        echo "username=$samba_user"
-        echo "password=$samba_pass"
-    } | sudo tee "$secrets_file" > /dev/null
-    sudo chmod 600 "$secrets_file"
-    log_message "Credentials stored securely in $secrets_file."
-
-    # Collect and validate share names
-    while :; do
-        read -p "Enter a Samba share name (or press Enter to finish): " share_name
-        [[ -z "$share_name" ]] && break
-        shares+=("$share_name")
-    done
-
-    if [[ ${#shares[@]} -eq 0 ]]; then
-        log_message "No shares were added."
-        echo "No shares were added."
-        return 1
-    fi
-
-    # Add each share to fstab and create mount points
-    for share_name in "${shares[@]}"; do
-        mount_point="/media/$share_name"
-        sudo mkdir -p "$mount_point"
-
-        # Check for existing fstab entry to avoid duplicates
-        if grep -qs "^//$server_ip/$share_name" /etc/fstab; then
-            log_message "Skipping $share_name; entry already exists in /etc/fstab."
-            echo "Skipping $share_name; entry already exists in /etc/fstab."
-            continue
-        fi
-
-        # Append entry to fstab
-        echo "//${server_ip}/${share_name} ${mount_point} cifs credentials=${secrets_file},uid=$(id -u),gid=$(id -g),iocharset=utf8,vers=3.0 0 0" | sudo tee -a /etc/fstab > /dev/null
-        log_message "Added $share_name to /etc/fstab, mounted at $mount_point."
-    done
-
-    # Attempt to mount all shares and log the result
-    if sudo mount -a; then
-        log_message "All Samba shares mounted successfully."
-        echo "All Samba shares mounted successfully."
-    else
-        log_message "Error occurred while mounting Samba shares."
-        echo "Error occurred while mounting Samba shares. Check $SETUP_LOG for details."
-        return 1
-    fi
 }
 
 share_home_directory() {
     local smb_conf="/etc/samba/smb.conf"
     local samba_user password
-
-    # Function to log messages to the general setup log file
-    log_message() {
-        local message="$1"
-        echo "$(date '+%Y-%m-%d %H:%M:%S') - $message" | sudo tee -a "$SETUP_LOG" > /dev/null
-    }
-
-    # Ensure script is run with necessary privileges
-    if [[ $EUID -ne 0 ]]; then
-        echo "Please run this script with sudo or as root."
-        return 1
-    fi
-
-    # Get the current user and their home directory
     samba_user="${SUDO_USER:-$USER}"
     home_directory=$(eval echo "~$samba_user")
 
-    # Ensure home directory exists
     if [[ ! -d "$home_directory" ]]; then
-        log_message "Home directory for user $samba_user not found."
+        log "Home directory for user $samba_user not found."
         echo "Home directory for user $samba_user not found. Exiting..."
         return 1
     fi
 
-    # Prompt for Samba password
     read -sp "Enter a password for Samba access to $samba_user's home directory: " password
     echo
 
-    # Add the user to Samba if not already added
     if ! sudo pdbedit -L | grep -qw "$samba_user"; then
         echo -e "$password\n$password" | sudo smbpasswd -a "$samba_user" > /dev/null
-        log_message "Samba user $samba_user added."
+        log "Samba user $samba_user added."
     else
         echo -e "$password\n$password" | sudo smbpasswd -s "$samba_user" > /dev/null
-        log_message "Samba password for $samba_user updated."
+        log "Samba password for $samba_user updated."
     fi
 
-    # Add Samba configuration for the user's home directory
     sudo tee -a "$smb_conf" > /dev/null <<EOF
 
 [$samba_user]
@@ -181,174 +83,149 @@ share_home_directory() {
     directory mask = 0700
 EOF
 
-    log_message "Samba share for $samba_user's home directory configured in $smb_conf."
-
-    # Restart Samba to apply changes
-    if sudo systemctl restart smbd; then
-        log_message "Samba service restarted successfully."
-        echo "Home directory shared successfully via Samba."
-    else
-        log_message "Failed to restart Samba service."
-        echo "Error: Failed to restart Samba. Check $SETUP_LOG for details."
-        return 1
-    fi
+    log "Samba share for $samba_user's home directory configured in $smb_conf."
+    sudo systemctl restart smbd
 }
 
-# Docker installation function for Debian
-install_docker() {
-    # Log message function to use the general setup log
-    log_message() {
-        local message="$1"
-        echo "$(date '+%Y-%m-%d %H:%M:%S') - $message" | sudo tee -a "$SETUP_LOG" > /dev/null
-    }
+setup_samba_shares() {
+    local secrets_file="/etc/samba_credentials"
+    local server_ip samba_user samba_pass share_name
+    local -a shares=()
 
-    # Confirm with the user before starting
-    if ! prompt_to_proceed "Would you like to install Docker on Debian?"; then
-        log_message "Docker installation skipped."
-        echo "Skipping Docker installation."
-        return
-    fi
-
-    log_message "Starting Docker installation on Debian."
-
-    # Step 1: Update the apt package index
-    if ! sudo apt-get update -y; then
-        log_message "Failed to update apt package index."
-        echo "Error: Failed to update package index."
+    log "Starting Samba shares setup..."
+    
+    read -p "Enter the file server hostname/IP: " server_ip
+    if [[ -z "$server_ip" ]]; then
+        log "No server hostname/IP entered. Exiting Samba setup..."
         return 1
     fi
-    log_message "Package index updated successfully."
 
-    # Step 2: Install required packages
-    if ! sudo apt-get install -y ca-certificates curl gnupg lsb-release; then
-        log_message "Failed to install prerequisite packages."
-        echo "Error: Prerequisite packages installation failed."
+    read -p "Enter the Samba username: " samba_user
+    read -sp "Enter the Samba password: " samba_pass
+    echo
+
+    {
+        echo "username=$samba_user"
+        echo "password=$samba_pass"
+    } | sudo tee "$secrets_file" > /dev/null
+    sudo chmod 600 "$secrets_file"
+    log "Credentials stored securely in $secrets_file."
+
+    while :; do
+        read -p "Enter a Samba share name (or press Enter to finish): " share_name
+        [[ -z "$share_name" ]] && break
+        shares+=("$share_name")
+    done
+
+    if [[ ${#shares[@]} -eq 0 ]]; then
+        log "No shares were added."
+        echo "No shares were added."
         return 1
     fi
-    log_message "Prerequisite packages installed successfully."
 
-    # Step 3: Add Docker's official GPG key
-    sudo mkdir -p /etc/apt/keyrings
-    if ! curl -fsSL https://download.docker.com/linux/debian/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg; then
-        log_message "Failed to add Docker's GPG key."
-        echo "Error: Failed to add Docker GPG key."
+    for share_name in "${shares[@]}"; do
+        mount_point="/media/$share_name"
+        sudo mkdir -p "$mount_point"
+        echo "//${server_ip}/${share_name} ${mount_point} cifs credentials=${secrets_file},uid=$(id -u),gid=$(id -g),iocharset=utf8,vers=3.0 0 0" | sudo tee -a /etc/fstab > /dev/null
+        log "Added $share_name to /etc/fstab, mounted at $mount_point."
+    done
+
+    if sudo mount -a; then
+        log "All Samba shares mounted successfully."
+        echo "All Samba shares mounted successfully."
+    else
+        log "Error occurred while mounting Samba shares."
+        echo "Error occurred while mounting Samba shares. Check $SETUP_LOG for details."
         return 1
     fi
-    log_message "Docker GPG key added successfully."
-
-    # Step 4: Set up the Docker repository
-    echo \
-    "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian \
-    $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-    log_message "Docker repository configured successfully."
-
-    # Step 5: Install Docker Engine
-    if ! sudo apt-get update -y && sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin; then
-        log_message "Failed to install Docker packages."
-        echo "Error: Docker installation failed."
-        return 1
-    fi
-    log_message "Docker installed successfully."
-
-    # Step 6: Verify Docker installation
-    if ! sudo docker --version; then
-        log_message "Docker installation verification failed."
-        echo "Error: Docker verification failed. Check $SETUP_LOG for details."
-        return 1
-    fi
-    log_message "Docker installation verified successfully."
-    echo "Docker has been installed and verified."
 }
 
 configure_dns() {
     local resolved_conf="/etc/systemd/resolved.conf"
     
-    # Prompt for DNS server IP address
     read -p "Enter the DNS server IP address (default: 10.1.1.1): " dns_server
-    dns_server=${dns_server:-10.1.1.1}  # Use default if no input is given
+    dns_server=${dns_server:-10.1.1.1}
 
-    # Log message function for general setup log
-    log_message() {
-        local message="$1"
-        echo "$(date '+%Y-%m-%d %H:%M:%S') - $message" | sudo tee -a "$SETUP_LOG" > /dev/null
-    }
-
-    # Configure DNS settings in systemd-resolved.conf
     {
-        echo "DNS=$dns_server"
-        echo "Domains=lan"
-        echo "Cache=no"
-        echo "DNSStubListener=no"
+        echo "DNS=[$dns_server]"
+        echo "FallbackDNS=8.8.8.8 8.8.4.4"
     } | sudo tee -a "$resolved_conf" > /dev/null
+    log "DNS configuration updated in $resolved_conf."
 
-    # Restart systemd-resolved service to apply changes
     if sudo systemctl restart systemd-resolved; then
-        log_message "DNS settings configured for Pi-hole in $resolved_conf."
-        echo "DNS settings configured successfully for Pi-hole."
+        log "Systemd-resolved service restarted successfully."
+        echo "DNS configuration has been applied."
     else
-        log_message "Error: Failed to restart systemd-resolved service."
-        echo "Error: Failed to restart systemd-resolved. Check $SETUP_LOG for details."
+        log "Failed to restart systemd-resolved service."
+        echo "Error: Failed to restart DNS service. Check $SETUP_LOG for details."
         return 1
     fi
 }
 
-create_update_script() {
-    log "Creating or updating update script for $LOCAL_USER..."
-    UPDATE_SCRIPT="/home/$LOCAL_USER/update"
-
-    # Define the new script content with additional cleanup commands
-    NEW_CONTENT=$(cat <<EOF
+create_update_cleanup_script() {
+    cat << 'EOF' | sudo tee /usr/local/bin/update_cleanup.sh > /dev/null
 #!/bin/bash
 
-# Update package index and upgrade packages
-sudo apt-get update -y && sudo apt-get upgrade -y
+# Update and upgrade the system packages
+sudo apt-get update && sudo apt-get upgrade -y
 
-# Remove unused packages and clean up
-sudo apt-get autoremove -y && sudo apt-get autoclean -y
+# Remove unused packages and dependencies
+sudo apt-get autoremove -y
 
-# Clean journal logs older than 3 days
-sudo journalctl --vacuum-time=3d
+# Clean up the local repository by removing package files
+sudo apt-get autoclean -y
 
-# Clean APT cache (uncomment if you want to keep the cache clean)
-# sudo apt-get clean
+# Remove old kernel versions (keep the current and one previous)
+current_kernel=$(uname -r)
+previous_kernel=$(dpkg --list | grep linux-image | awk '{print $2}' | grep -v "$current_kernel" | tail -n 1)
+if [[ -n "$previous_kernel" ]]; then
+    sudo apt-get remove --purge -y "$previous_kernel"
+fi
 
-# Remove orphaned packages (requires deborphan to be installed)
-# sudo apt-get install -y deborphan
-# sudo apt-get remove --purge \$(deborphan)
+# Clear the APT cache
+sudo apt-get clean
 
+# Remove orphaned packages (no longer required)
+sudo deborphan | xargs -r sudo apt-get remove --purge -y
+
+# Remove any old log files
+sudo find /var/log -type f -name '*.log' -delete
+
+# Optional: clear thumbnail cache (if using a desktop environment)
+if [[ -d "$HOME/.cache/thumbnails" ]]; then
+    rm -rf "$HOME/.cache/thumbnails/*"
+fi
+
+# Optional: clear user-specific cache (be careful with this)
+rm -rf "$HOME/.cache/*"
+
+echo "Cleanup complete!"
 EOF
-    )
 
-    # Check if the script needs to be created or updated
-    if [ ! -f "$UPDATE_SCRIPT" ] || [ "$NEW_CONTENT" != "$(cat "$UPDATE_SCRIPT")" ]; then
-        echo "$NEW_CONTENT" | sudo tee "$UPDATE_SCRIPT" > /dev/null
-        sudo chmod +x "$UPDATE_SCRIPT"
-        log "Update script created or updated successfully."
-    else
-        log "Update script is already up to date."
-    fi
-}
-
-
-
-
-
-
-
-# Function to prompt user for each step
-prompt_to_proceed() {
-    local step_message="$1"
-    read -p "$step_message [y/n]: " response
-    [[ "$response" =~ ^[Yy]$ ]]
+    sudo chmod +x /usr/local/bin/update_cleanup.sh
+    log "Update and cleanup script created at /usr/local/bin/update_cleanup.sh."
 }
 
 configure_bash_aliases() {
-    log "Setting up Bash aliases for $LOCAL_USER..."
-    BASH_ALIASES_FILE="/home/$LOCAL_USER/.bash_aliases"
+    # Determine the current user's home directory
+    local target_home
+    target_home=$(getent passwd "$SUDO_USER" | cut -d: -f6)
 
-    # Create the aliases content
-    NEW_CONTENT=$(cat <<EOF
-# Bash Aliases
+    # If SUDO_USER is not set, fall back to the current user's home
+    if [ -z "$target_home" ]; then
+        target_home="$HOME"
+    fi
+
+    # Create or append to the .bash_aliases file
+    if [ ! -f "$target_home/.bash_aliases" ]; then
+        touch "$target_home/.bash_aliases"
+        echo "# Custom Bash aliases" >> "$target_home/.bash_aliases"
+    fi
+
+    # Check for existing aliases to avoid duplication
+    if ! grep -q "alias ..='cd ..'" "$target_home/.bash_aliases"; then
+        cat << 'EOF' >> "$target_home/.bash_aliases"
+
 alias ..='cd ..'
 alias ...='cd ../..'
 alias dock='cd ~/.docker/compose'
@@ -361,97 +238,152 @@ alias dstop='docker compose -f ~/.docker/compose/docker-compose.yml stop'
 alias ls='ls --color -Flah'
 alias update='~/update'
 EOF
-    )
 
-    # Check if .bash_aliases file exists and needs updating
-    if [ ! -f "$BASH_ALIASES_FILE" ] || [ "$NEW_CONTENT" != "$(cat "$BASH_ALIASES_FILE")" ]; then
-        echo "$NEW_CONTENT" | sudo tee "$BASH_ALIASES_FILE" > /dev/null
-        log "Bash aliases file created or updated successfully."
+        log "Bash aliases configured in $target_home/.bash_aliases."
+        echo "Bash aliases added to $target_home/.bash_aliases. Run 'source ~/.bash_aliases' to apply changes."
     else
-        log "Bash aliases file is already up to date."
+        echo "Bash aliases are already configured in $target_home/.bash_aliases."
     fi
 
-    # Ensure .bash_aliases is sourced in .bashrc
-    if ! sudo grep -q "if [ -f ~/.bash_aliases ]" "/home/$LOCAL_USER/.bashrc"; then
-        echo "if [ -f ~/.bash_aliases ]; then . ~/.bash_aliases; fi" | sudo tee -a "/home/$LOCAL_USER/.bashrc" > /dev/null
-        log "Added .bash_aliases source command to /home/$LOCAL_USER/.bashrc."
+    # Ensure .bashrc sources the .bash_aliases file
+    if ! grep -q "if [ -f $target_home/.bash_aliases ]; then" "$target_home/.bashrc"; then
+        echo "if [ -f $target_home/.bash_aliases ]; then" >> "$target_home/.bashrc"
+        echo "    . $target_home/.bash_aliases" >> "$target_home/.bashrc"
+        echo "fi" >> "$target_home/.bashrc"
+        log ".bashrc updated to source $target_home/.bash_aliases."
     fi
-
-    # Set appropriate permissions for .bash_aliases
-    sudo chown "$LOCAL_USER:$LOCAL_USER" "$BASH_ALIASES_FILE"
-    sudo chmod 644 "$BASH_ALIASES_FILE"
-
-    log "Bash aliases setup completed for $LOCAL_USER."
 }
 
-# Main setup function
-main_setup() {
-    # Set hostname
-    read -p "Do you want to change the hostname? (y/n): " change_hostname
-    if [[ "$change_hostname" =~ ^[yY]$ ]]; then
-        read -p "Enter the desired hostname for this server: " NEW_HOSTNAME
-        set_hostname "$change_hostname" "$NEW_HOSTNAME"
+install_docker() {
+    echo "Starting Docker installation..."
+
+    # Remove existing Docker-related packages
+    for pkg in docker.io docker-doc docker-compose podman-docker containerd runc; do
+        sudo apt-get remove -y "$pkg"
+    done
+
+    # Update package index
+    sudo apt-get update
+
+    # Install necessary packages
+    sudo apt-get install -y ca-certificates curl
+
+    # Create directory for APT keyrings
+    sudo install -m 0755 -d /etc/apt/keyrings
+
+    # Download Docker GPG key
+    sudo curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc
+
+    # Set permissions for the GPG key
+    sudo chmod a+r /etc/apt/keyrings/docker.asc
+
+    # Add Docker repository to APT sources
+    echo \
+      "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian \
+      $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+      sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+    # Update package index again
+    sudo apt-get update
+
+    # Install Docker packages
+    sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
+    # Post-installation: Add user to the docker group
+    sudo usermod -aG docker "$USER"
+
+    echo "Docker installation completed successfully."
+    echo "Please log out and back in for the changes to take effect."
+}
+
+sshkey() {
+    # Create .ssh directory if it doesn't exist
+    mkdir -p ~/.ssh
+    chmod 700 ~/.ssh
+
+    # Add the SSH2 public key to authorized_keys
+    echo "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCJZfbiKdE9swjxMQ7cBH8Dh2gPEgClDtUGEYV8Xf0GbicoxgjlKohRKwW3kbOAZsjA0ecjtRtNNJRRkMfVmVNmkrga1HXN1vL3vs7QuOt5X3+H4h3u2TkEmxpohxGURbi9qHBAV+BAljqZHtR08+qRZZ/ezrtr2gKnteQ5l1q/y/N8X4KSholelu6/TOaPzHbqapEsFvKwbxdh5uIAziyWL20y8J5CXClCg8BrODVYr6rd0jrt5Z3aV2zpCQm524dmsXTGHnRWXL4mtFNMrHeK6LaC69WVzKkkN2lwfNZy/wScYXbNPqDA0M5RZLmBh4hj62zic8CIHYVhlNuu+PLh" >> ~/.ssh/authorized_keys
+
+    # Set permissions for the authorized_keys file
+    chmod 600 ~/.ssh/authorized_keys
+
+    echo "SSH key has been added to authorized_keys."
+}
+
+disable_password_auth() {
+    # Backup the original sshd_config file
+    sudo cp /etc/ssh/sshd_config /etc/ssh/sshd_config.bak
+
+    # Modify the sshd_config file to disable password authentication
+    echo "Disabling password authentication in /etc/ssh/sshd_config..."
+    
+    # Check if the file contains the PasswordAuthentication line and update it
+    if grep -q "^PasswordAuthentication" /etc/ssh/sshd_config; then
+        sudo sed -i 's/^PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
     else
-        log "Hostname change skipped."
+        echo "PasswordAuthentication no" | sudo tee -a /etc/ssh/sshd_config
     fi
 
-    # Install packages
-    read -p "Do you want to install necessary packages? (y/n): " install_choice
-    if [[ "$install_choice" =~ ^[yY]$ ]]; then
+    # Disable ChallengeResponseAuthentication as well
+    if grep -q "^ChallengeResponseAuthentication" /etc/ssh/sshd_config; then
+        sudo sed -i 's/^ChallengeResponseAuthentication.*/ChallengeResponseAuthentication no/' /etc/ssh/sshd_config
+    else
+        echo "ChallengeResponseAuthentication no" | sudo tee -a /etc/ssh/sshd_config
+    fi
+
+    # Restart the SSH service to apply the changes
+    echo "Restarting SSH service..."
+    sudo systemctl restart ssh
+
+    echo "Password authentication has been disabled. Please test your SSH key login."
+}
+
+main() {
+    log "Starting setup script..."
+
+    if prompt_to_proceed "Would you like to change the hostname?"; then
+        read -p "Enter new hostname: " NEW_HOSTNAME
+        set_hostname "y" "$NEW_HOSTNAME"
+    fi
+
+    if prompt_to_proceed "Would you like to install necessary packages?"; then
         install_packages
-    else
-        log "Package installation skipped."
     fi
 
-    # Share home directory
-    read -p "Do you want to share the user's home directory? (y/n): " share_home_choice
-    if [[ "$share_home_choice" =~ ^[yY]$ ]]; then
+    if prompt_to_proceed "Would you like to share the home directory via Samba?"; then
         share_home_directory
-    else
-        log "Home directory sharing skipped."
     fi
 
-    # Set up Samba shares
-    read -p "Do you want to set up Samba shares? (y/n): " samba_choice
-    if [[ "$samba_choice" =~ ^[yY]$ ]]; then
+    if prompt_to_proceed "Would you like to set up Samba shares?"; then
         setup_samba_shares
-    else
-        log "Samba share setup skipped."
     fi
 
-    # Install Docker
-    read -p "Do you want to install Docker? (y/n): " docker_choice
-    if [[ "$docker_choice" =~ ^[yY]$ ]]; then
-        install_docker
-    else
-        log "Docker installation skipped."
+    if prompt_to_proceed "Would you like to configure DNS settings for Pi-hole?"; then
+        configure_dns
     fi
 
-    # Configure DNS
-    read -p "Is this system going to be configured as a Pi-hole? (y/n): " pihole_choice
-    if [[ "$pihole_choice" =~ ^[yY]$ ]]; then
-        read -p "Enter the DNS host (IP address): " dns_host
-        configure_dns "$dns_host"
-    else
-        log "DNS configuration skipped."
+    if prompt_to_proceed "Would you like to create a system update/cleanup script?"; then
+        create_update_cleanup_script
     fi
 
-    # Create update script
-    read -p "Do you want to create or update the system update script? (y/n): " update_script_choice
-    if [[ "$update_script_choice" =~ ^[yY]$ ]]; then
-        create_update_script
-    else
-        log "Update script creation skipped."
-    fi
-
-    # Configure Bash aliases
-    read -p "Do you want to configure Bash aliases? (y/n): " aliases_choice
-    if [[ "$aliases_choice" =~ ^[yY]$ ]]; then
+    if prompt_to_proceed "Would you like to configure Bash aliases?"; then
         configure_bash_aliases
-    else
-        log "Bash aliases configuration skipped."
     fi
+ 
+    if prompt_to_proceed "Would you like to configure Docker?"; then
+        install_docker
+    fi
+	
+	if prompt_to_proceed "Would you like to install your public SSH key?"; then
+        sshkey
+    fi
+	
+	if prompt_to_proceed "Would you like to disable SSH pw authentication?"; then
+        disable_password_auth
+    fi
+
+    log "Setup script completed."
+    echo "Setup script completed. Check $SETUP_LOG for details."
 }
 
-# Call the main setup function
-main_setup
+main "$@"
