@@ -242,7 +242,7 @@ alias dr='docker compose -f ~/.docker/compose/docker-compose.yml restart'
 alias dstart='docker compose -f ~/.docker/compose/docker-compose.yml start'
 alias dstop='docker compose -f ~/.docker/compose/docker-compose.yml stop'
 alias ls='ls --color -Flah'
-alias update='~/update'
+alias update='/usr/local/bin/update_cleanup.sh'
 EOF
 
         log "Bash aliases configured in $target_home/.bash_aliases."
