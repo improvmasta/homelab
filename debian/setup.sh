@@ -1,5 +1,11 @@
 #!/bin/bash
 
+# Check if running as root
+if [[ $EUID -ne 0 ]]; then
+    echo "This script must be run as root. Please run it with sudo or as the root user."
+    exit 1
+fi
+
 # Define the general setup log file
 SETUP_LOG="/var/log/setup.log"
 
@@ -296,26 +302,26 @@ install_docker() {
     echo "Please log out and back in for the changes to take effect."
 }
 
+# Function to set up SSH key
 sshkey() {
     # Determine the current user's home directory
-    local target_home
-    target_home=$(getent passwd "$SUDO_USER" | cut -d: -f6)
+    local target_user target_home
+    target_user="${SUDO_USER:-$USER}"
+    target_home=$(getent passwd "$target_user" | cut -d: -f6)
 
-    # If SUDO_USER is not set, fall back to the current user's home
-    if [ -z "$target_home" ]; then
-        target_home="$HOME"
-    fi
-    # Create .ssh directory if it doesn't exist
-    mkdir -p "$target_home/.ssh"
-    chmod 700 "$target_home/.ssh"
+    # Create .ssh directory if it doesn't exist and set permissions as the target user
+    sudo -u "$target_user" mkdir -p "$target_home/.ssh"
+    sudo -u "$target_user" chmod 700 "$target_home/.ssh"
 
-    # Add the SSH2 public key to authorized_keys
-    echo "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCJZfbiKdE9swjxMQ7cBH8Dh2gPEgClDtUGEYV8Xf0GbicoxgjlKohRKwW3kbOAZsjA0ecjtRtNNJRRkMfVmVNmkrga1HXN1vL3vs7QuOt5X3+H4h3u2TkEmxpohxGURbi9qHBAV+BAljqZHtR08+qRZZ/ezrtr2gKnteQ5l1q/y/N8X4KSholelu6/TOaPzHbqapEsFvKwbxdh5uIAziyWL20y8J5CXClCg8BrODVYr6rd0jrt5Z3aV2zpCQm524dmsXTGHnRWXL4mtFNMrHeK6LaC69WVzKkkN2lwfNZy/wScYXbNPqDA0M5RZLmBh4hj62zic8CIHYVhlNuu+PLh" >> "$target_home/.ssh/authorized_keys"
+    # Add the SSH2 public key to authorized_keys in OpenSSH format
+    sudo -u "$target_user" tee -a "$target_home/.ssh/authorized_keys" > /dev/null << 'EOF'
+ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDOeNMeemwPLteWku0Fz/u/LsbfaEPnkbRNZKVY6T9wZlAoxCbtJn1YfBhPFb87a6xYa0mdloH0rQTHVEAOqFidUKc9O2E4p7yMK6994y+8P/xriCgUzl4huyy50MR1a2Ao6M9T9XooFomestkycbHy0Dup+lDNmE8YG/kE243b0uJnHDDsNsn9K8169haugNlcBlUSY638K/u5M7Xz0YPUGCnXxTUVgfrEozyzvv8ZzOieHm2HIzRoLuCUz6cn8vEmXZW075Ae+5L/BQIiZhFCj0uaKGZ7LE3GfDt+eRLK1EWabP+i3R5+ORhLoIybK6JKoLTIyKaTsm+UWxf8rM7v
+EOF
 
-    # Set permissions for the authorized_keys file
-    chmod 600 "$target_home/.ssh/authorized_keys"
+    # Set permissions on authorized_keys as the target user
+    sudo -u "$target_user" chmod 600 "$target_home/.ssh/authorized_keys"
 
-    echo "SSH key has been added to authorized_keys."
+    echo "SSH key has been added to $target_user's authorized_keys."
 }
 
 disable_password_auth() {
