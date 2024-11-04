@@ -392,9 +392,9 @@ main() {
         sshkey
     fi
 	
-#	if prompt_to_proceed "Would you like to disable SSH pw authentication?"; then
-#        disable_password_auth
-#    fi
+	if prompt_to_proceed "Would you like to disable SSH pw authentication?"; then
+        disable_password_auth
+    fi
 
     log "Setup script completed."
     echo "Setup script completed. Check $SETUP_LOG for details."
