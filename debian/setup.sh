@@ -297,15 +297,23 @@ install_docker() {
 }
 
 sshkey() {
+    # Determine the current user's home directory
+    local target_home
+    target_home=$(getent passwd "$SUDO_USER" | cut -d: -f6)
+
+    # If SUDO_USER is not set, fall back to the current user's home
+    if [ -z "$target_home" ]; then
+        target_home="$HOME"
+    fi
     # Create .ssh directory if it doesn't exist
-    mkdir -p ~/.ssh
-    chmod 700 ~/.ssh
+    mkdir -p "$target_home/.ssh"
+    chmod 700 "$target_home/.ssh"
 
     # Add the SSH2 public key to authorized_keys
-    echo "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCJZfbiKdE9swjxMQ7cBH8Dh2gPEgClDtUGEYV8Xf0GbicoxgjlKohRKwW3kbOAZsjA0ecjtRtNNJRRkMfVmVNmkrga1HXN1vL3vs7QuOt5X3+H4h3u2TkEmxpohxGURbi9qHBAV+BAljqZHtR08+qRZZ/ezrtr2gKnteQ5l1q/y/N8X4KSholelu6/TOaPzHbqapEsFvKwbxdh5uIAziyWL20y8J5CXClCg8BrODVYr6rd0jrt5Z3aV2zpCQm524dmsXTGHnRWXL4mtFNMrHeK6LaC69WVzKkkN2lwfNZy/wScYXbNPqDA0M5RZLmBh4hj62zic8CIHYVhlNuu+PLh" >> ~/.ssh/authorized_keys
+    echo "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCJZfbiKdE9swjxMQ7cBH8Dh2gPEgClDtUGEYV8Xf0GbicoxgjlKohRKwW3kbOAZsjA0ecjtRtNNJRRkMfVmVNmkrga1HXN1vL3vs7QuOt5X3+H4h3u2TkEmxpohxGURbi9qHBAV+BAljqZHtR08+qRZZ/ezrtr2gKnteQ5l1q/y/N8X4KSholelu6/TOaPzHbqapEsFvKwbxdh5uIAziyWL20y8J5CXClCg8BrODVYr6rd0jrt5Z3aV2zpCQm524dmsXTGHnRWXL4mtFNMrHeK6LaC69WVzKkkN2lwfNZy/wScYXbNPqDA0M5RZLmBh4hj62zic8CIHYVhlNuu+PLh" >> "$target_home/.ssh/authorized_keys"
 
     # Set permissions for the authorized_keys file
-    chmod 600 ~/.ssh/authorized_keys
+    chmod 600 "$target_home/.ssh/authorized_keys"
 
     echo "SSH key has been added to authorized_keys."
 }
@@ -378,9 +386,9 @@ main() {
         sshkey
     fi
 	
-	if prompt_to_proceed "Would you like to disable SSH pw authentication?"; then
-        disable_password_auth
-    fi
+#	if prompt_to_proceed "Would you like to disable SSH pw authentication?"; then
+#        disable_password_auth
+#    fi
 
     log "Setup script completed."
     echo "Setup script completed. Check $SETUP_LOG for details."
