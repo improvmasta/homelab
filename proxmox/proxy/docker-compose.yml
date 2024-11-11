@@ -1,0 +1,125 @@
+services:
+  zoraxy:
+    image: zoraxydocker/zoraxy:latest
+    container_name: zoraxy
+    ports:
+      - 80:80
+      - 443:443
+      - 8000:8000/tcp
+    volumes:
+      - /home/lindsay/.config/appdata/zoraxy:/opt/zoraxy/config/
+    environment:
+      ARGS: '-noauth=false'
+        
+  duplicati:
+    container_name: duplicati
+    image: lscr.io/linuxserver/duplicati:latest
+    hostname: duplicati
+    environment:
+      PGID: "1000"
+      PUID: "1000"
+      TZ: America/New_York
+    ports:
+      - "8200:8200"
+    volumes:
+      - /home/lindsay/.config/appdata/duplicati:/config
+      - /etc/localtime:/etc/localtime:ro
+      - /home/lindsay/.config/appdata:/config/appdata
+      - /home/lindsay/storage:/storage
+      - /home/lindsay/.docker/:/docker
+      - /media/f/:/media/f/
+    restart: unless-stopped
+
+  pihole:
+    container_name: pihole
+    image: pihole/pihole:latest
+    hostname: pihole
+    environment:
+      DNS1: 1.1.1.1
+      DNS2: 8.8.8.8
+      ServerIP: 0.0.0.0
+      TZ: America/New_York
+      WEBPASSWORD: ""
+    ports:
+      - "446:443"
+      - "8008:80"
+      - "53:53/tcp"
+      - "53:53/udp"
+      - "67:67/udp"
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /home/lindsay/.config/appdata/pihole/dnsmasq.d:/etc/dnsmasq.d
+      - /home/lindsay/.config/appdata/pihole/pihole:/etc/pihole
+      - /home/lindsay/storage:/storage
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+
+  watchtower:
+    container_name: watchtower
+    image: ghcr.io/containrrr/watchtower:latest
+    environment:
+      WATCHTOWER_CLEANUP: "true"
+      WATCHTOWER_SCHEDULE: "0 0 4 * * *"
+      TZ: America/New_York
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /home/lindsay/storage:/storage
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: unless-stopped
+
+  wg-easy:
+    environment:
+      # Change Language:
+      # (Supports: en, ua, ru, tr, no, pl, fr, de, ca, es, ko, vi, nl, is, pt, chs, cht, it, th, hi, ja, si)
+      - LANG=en
+      # ⚠️ Required:
+      # Change this to your host's public address
+      - WG_HOST=jupiterns.org
+      # Optional:
+      # - PASSWORD_HASH=$$2y$$10$$hBCoykrB95WSzuV4fafBzOHWKu9sbyVa34GJr8VV5R/pIelfEMYyG (needs double $$, hash of 'foobar123'; see "How_to_generate_an_bcrypt_hash.md" for generate the hash)
+      # - PORT=51821
+      # - WG_PORT=51820
+      # - WG_CONFIG_PORT=92820
+      # - WG_DEFAULT_ADDRESS=10.8.0.x
+      - WG_DEFAULT_DNS=10.1.1.1
+      # - WG_MTU=1420
+      # - WG_ALLOWED_IPS=192.168.15.0/24, 10.0.1.0/24
+      # - WG_PERSISTENT_KEEPALIVE=25
+      # - WG_PRE_UP=echo "Pre Up" > /etc/wireguard/pre-up.txt
+      # - WG_POST_UP=echo "Post Up" > /etc/wireguard/post-up.txt
+      # - WG_PRE_DOWN=echo "Pre Down" > /etc/wireguard/pre-down.txt
+      # - WG_POST_DOWN=echo "Post Down" > /etc/wireguard/post-down.txt
+      # - UI_TRAFFIC_STATS=true
+      # - UI_CHART_TYPE=0 # (0 Charts disabled, 1 # Line chart, 2 # Area chart, 3 # Bar chart)
+      # - WG_ENABLE_ONE_TIME_LINKS=true
+      # - UI_ENABLE_SORT_CLIENTS=true
+      # - WG_ENABLE_EXPIRES_TIME=true
+      # - ENABLE_PROMETHEUS_METRICS=false
+      # - PROMETHEUS_METRICS_PASSWORD=$$2a$$12$$vkvKpeEAHD78gasyawIod.1leBMKg8sBwKW.pQyNsq78bXV3INf2G # (needs double $$, hash of 'prometheus_password'; see "How_to_generate_an_bcrypt_hash.md" for generate the hash)
+    image: ghcr.io/wg-easy/wg-easy
+    container_name: wg-easy
+    volumes:
+      - /home/lindsay/.config/appdata/wgeasy:/etc/wireguard
+    ports:
+      - "51820:51820/udp"
+      - "51821:51821/tcp"
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+      # - NET_RAW # ⚠️ Uncomment if using Podman
+    sysctls:
+      - net.ipv4.ip_forward=1
+      - net.ipv4.conf.all.src_valid_mark=1
+
+  tautulli:
+    image: ghcr.io/tautulli/tautulli
+    container_name: tautulli
+    restart: unless-stopped
+    volumes:
+      - /home/lindsay/.config/appdata/tautulli:/config
+    environment:
+      - TZ=America/New_York
+    ports:
+      - 8181:8181
