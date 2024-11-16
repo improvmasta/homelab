@@ -112,24 +112,37 @@ configure_fstab_mounts() {
     mount -a && echo "fstab mounts configured."
 }
 
-# Function to restore the most recent backup
+# Function to restore the most recent backup (only VM and storage files)
 restore_configs() {
     read -p "Do you want to restore from the most recent backup? (yes/no): " restore_choice
     if [[ "$restore_choice" =~ ^(yes|y)$ ]]; then
         read -p "Enter the backup folder path (where the backups are stored): " backup_folder
 
         if [ -d "$backup_folder" ]; then
+            # Find the most recent backup file
             backup_file=$(ls -t "$backup_folder"/proxmox_backup_*.tar.gz | head -n 1)
 
             if [ -f "$backup_file" ]; then
                 echo "Restoring from the most recent backup: $backup_file"
-                tar -xzf "$backup_file" -C /etc pve
 
-                if [ -d "/etc/pve/qemu-server" ] && [ -d "/etc/pve/lxc" ] && [ -f "/etc/pve/storage.cfg" ]; then
-                    echo "Restoration successful!"
+                # Ask for the hostname where the configurations should be restored
+                read -p "Enter the hostname for the Proxmox node: " hostname
+
+                # Ensure the specified hostname exists under the nodes directory
+                if [ -d "/etc/pve/nodes/$hostname" ]; then
+                    # Extract only the storage and VM/container files for the specified hostname
+                    tar -xzf "$backup_file" -C /etc pve/storage.cfg /etc/pve/nodes/$hostname/lxc /etc/pve/nodes/$hostname/qemu-server
+
+                    # Check if the restoration of the storage and VM/container files was successful
+                    if [ -d "/etc/pve/nodes/$hostname/qemu-server" ] && [ -d "/etc/pve/nodes/$hostname/lxc" ] && [ -f "/etc/pve/storage.cfg" ]; then
+                        echo "Restoration successful!"
+                    else
+                        log_error "Restoration failed. Backup may be incomplete."
+                        echo "Error: Restoration failed."
+                    fi
                 else
-                    log_error "Restoration failed. Backup may be incomplete."
-                    echo "Error: Restoration failed."
+                    log_error "Hostname $hostname not found in /etc/pve/nodes."
+                    echo "Error: Hostname $hostname not found."
                 fi
             else
                 log_error "No backup files found in $backup_folder."
