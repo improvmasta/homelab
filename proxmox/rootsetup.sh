@@ -194,7 +194,15 @@ setup_bash_aliases() {
 # Custom bash aliases
 alias ..='cd ..'
 alias ...='cd ../..'
-alias ..b='cd ~'
+alias dock='cd ~/.docker/compose'
+alias dc='cd ~/.config/appdata/'
+alias dup='docker compose -f ~/.docker/compose/docker-compose.yml up -d'
+alias ddown='docker compose -f ~/.docker/compose/docker-compose.yml down'
+alias dr='docker compose -f ~/.docker/compose/docker-compose.yml restart'
+alias dstart='docker compose -f ~/.docker/compose/docker-compose.yml start'
+alias dstop='docker compose -f ~/.docker/compose/docker-compose.yml stop'
+alias ls='ls --color -FlahH'
+alias update='/usr/local/bin/update_cleanup.sh'
 EOF
 
         chmod 644 /root/.bash_aliases
@@ -204,7 +212,7 @@ EOF
 
 # Function to create the update and cleanup script
 create_update_cleanup_script() {
-    cat << 'EOF' | tee /usr/local/bin/update > /dev/null
+    cat << 'EOF' | tee /usr/local/bin/update_cleanup.sh > /dev/null
 #!/bin/bash
 
 # Update and upgrade the system packages
@@ -218,8 +226,8 @@ current_kernel=$(uname -r)
 previous_kernel=$(dpkg --list | grep linux-image | awk '{print $2}' | grep -v "$current_kernel" | tail -n 1)
 [[ -n "$previous_kernel" ]] && apt-get remove --purge -y "$previous_kernel"
 EOF
-    chmod +x /usr/local/bin/update
-    echo "Update and cleanup script created at /usr/local/bin/update."
+    chmod +x /usr/local/bin/update_cleanup
+    echo "Update and cleanup script created at /usr/local/bin/update_cleanup.sh."
 }
 
 # Function to create the backup script
@@ -237,7 +245,7 @@ BACKUP_FILE="\$BACKUP_DIR/proxmox_backup_\$DATE.tar.gz"
 mkdir -p "\$BACKUP_DIR"
 
 # Backup /etc/pve (VM and storage configurations) while retaining the directory structure
-echo "Backing up VM and storage configuration files to \$BACKUP_FILE..."
+echo "Backing up PVE files to \$BACKUP_FILE..."
 tar -czf "\$BACKUP_FILE" -C /etc pve
 
 # Remove backups older than 7 days (daily backups)
@@ -267,17 +275,84 @@ setup_backup_cron() {
 # Main function to run all functions
 run_all() {
     echo "Running all steps..."
-    install_packages
-    configure_repositories
-    update_pveam_templates
-    create_user_and_add_to_sudoers
-    import_zfs_pool
-    configure_fstab_mounts
-    restore_configs
-    setup_bash_aliases
-    create_update_cleanup_script
-    create_backup_script
-    setup_backup_cron
+
+    # Install packages
+    echo "Do you want to proceed with installing packages? (yes/no): "
+    read install_choice
+    if [[ "$install_choice" =~ ^(yes|y)$ ]]; then
+        install_packages
+    fi
+
+    # Configure repositories
+    echo "Do you want to proceed with configuring repositories? (yes/no): "
+    read repo_choice
+    if [[ "$repo_choice" =~ ^(yes|y)$ ]]; then
+        configure_repositories
+    fi
+
+    # Update PVEAM templates
+    echo "Do you want to proceed with updating PVEAM templates? (yes/no): "
+    read pveam_choice
+    if [[ "$pveam_choice" =~ ^(yes|y)$ ]]; then
+        update_pveam_templates
+    fi
+
+    # Create user and add to sudoers
+    echo "Do you want to proceed with creating a user and adding to sudoers? (yes/no): "
+    read user_choice
+    if [[ "$user_choice" =~ ^(yes|y)$ ]]; then
+        create_user_and_add_to_sudoers
+    fi
+
+    # Import ZFS pool
+    echo "Do you want to proceed with importing the ZFS pool? (yes/no): "
+    read zfs_choice
+    if [[ "$zfs_choice" =~ ^(yes|y)$ ]]; then
+        import_zfs_pool
+    fi
+
+    # Configure fstab mounts
+    echo "Do you want to proceed with configuring fstab mounts? (yes/no): "
+    read fstab_choice
+    if [[ "$fstab_choice" =~ ^(yes|y)$ ]]; then
+        configure_fstab_mounts
+    fi
+
+    # Restore configurations
+    echo "Do you want to proceed with restoring configurations from backup? (yes/no): "
+    read restore_choice
+    if [[ "$restore_choice" =~ ^(yes|y)$ ]]; then
+        restore_configs
+    fi
+
+    # Setup bash aliases
+    echo "Do you want to proceed with setting up bash aliases? (yes/no): "
+    read aliases_choice
+    if [[ "$aliases_choice" =~ ^(yes|y)$ ]]; then
+        setup_bash_aliases
+    fi
+
+    # Create update and cleanup script
+    echo "Do you want to proceed with creating the update and cleanup script? (yes/no): "
+    read update_script_choice
+    if [[ "$update_script_choice" =~ ^(yes|y)$ ]]; then
+        create_update_cleanup_script
+    fi
+
+    # Create backup script
+    echo "Do you want to proceed with creating the backup script? (yes/no): "
+    read backup_script_choice
+    if [[ "$backup_script_choice" =~ ^(yes|y)$ ]]; then
+        create_backup_script
+    fi
+
+    # Setup backup cron
+    echo "Do you want to proceed with setting up the backup cron job? (yes/no): "
+    read backup_cron_choice
+    if [[ "$backup_cron_choice" =~ ^(yes|y)$ ]]; then
+        setup_backup_cron
+    fi
+
     echo "All functions completed."
 }
 
