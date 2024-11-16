@@ -226,7 +226,7 @@ current_kernel=$(uname -r)
 previous_kernel=$(dpkg --list | grep linux-image | awk '{print $2}' | grep -v "$current_kernel" | tail -n 1)
 [[ -n "$previous_kernel" ]] && apt-get remove --purge -y "$previous_kernel"
 EOF
-    chmod +x /usr/local/bin/update_cleanup
+    chmod +x /usr/local/bin/update_cleanup.sh
     echo "Update and cleanup script created at /usr/local/bin/update_cleanup.sh."
 }
 
