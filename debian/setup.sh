@@ -15,18 +15,55 @@ log() {
 }
 
 # Function to prompt user for confirmation
-prompt_to_proceed() {
-    local step_message="$1"
-    read -p "$step_message [y/n]: " response
-    [[ "$response" =~ ^[Yy]$ ]]
+menu() {
+    echo "Select an option:"
+    echo "1. Full Setup"
+    echo "2. Set Hostname"
+    echo "3. Install Packages"
+    echo "4. Configure Samba Share"
+    echo "5. Set Up Samba Shares"
+    echo "6. Install Docker"
+    echo "7. Add SSH Key Authentication"
+    echo "8. Disable Password Authentication for SSH"
+    echo "9. Create Update/Cleanup Script"
+    echo "10. Add Bash Aliases"
+    echo "11. Exit"
+    read -p "Enter your choice: " choice
+
+    case "$choice" in
+        1) full_setup ;;
+        2) set_hostname ;;
+        3) install_packages ;;
+        4) share_home_directory ;;
+        5) setup_samba_shares ;;
+        6) install_docker ;;
+        7) add_ssh_key ;;
+        8) disable_ssh_pw_auth ;;
+        9) create_update_cleanup_script ;;
+        10) configure_bash_aliases ;;
+        11) exit 0 ;;
+        *) echo "Invalid choice, please try again." && menu ;;
+    esac
+}
+
+# Full setup function that runs everything
+full_setup() {
+    set_hostname
+    install_packages
+    share_home_directory
+    setup_samba_shares
+    install_docker
+    add_ssh_key
+    disable_ssh_pw_auth
+    create_update_cleanup_script
+    configure_bash_aliases
 }
 
 set_hostname() {
     log "Checking if hostname change is required..."
-    local change_hostname="$1"
-    local NEW_HOSTNAME="$2"
+    local NEW_HOSTNAME="$1"
 
-    if [[ "$change_hostname" =~ ^[yY]$ ]] && [ -n "$NEW_HOSTNAME" ]; then
+    if [ -n "$NEW_HOSTNAME" ]; then
         log "Setting hostname to $NEW_HOSTNAME..."
         CURRENT_HOSTNAME=$(hostname)
 
@@ -146,26 +183,62 @@ setup_samba_shares() {
     fi
 }
 
-configure_dns() {
-    local resolved_conf="/etc/systemd/resolved.conf"
-    
-    read -p "Enter the DNS server IP address (default: 10.1.1.1): " dns_server
-    dns_server=${dns_server:-10.1.1.1}
-
-    {
-        echo "DNS=[$dns_server]"
-        echo "FallbackDNS=8.8.8.8 8.8.4.4"
-    } | sudo tee -a "$resolved_conf" > /dev/null
-    log "DNS configuration updated in $resolved_conf."
-
-    if sudo systemctl restart systemd-resolved; then
-        log "Systemd-resolved service restarted successfully."
-        echo "DNS configuration has been applied."
-    else
-        log "Failed to restart systemd-resolved service."
-        echo "Error: Failed to restart DNS service. Check $SETUP_LOG for details."
-        return 1
+install_docker() {
+    log "Installing Docker..."
+    if ! sudo apt-get update -y; then
+        log "Failed to update package list."
+        exit 1
     fi
+
+    if ! sudo apt-get install -y apt-transport-https ca-certificates curl software-properties-common; then
+        log "Failed to install dependencies for Docker."
+        exit 1
+    fi
+
+    if ! curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/docker-archive-keyring.gpg; then
+        log "Failed to add Docker GPG key."
+        exit 1
+    fi
+
+    if ! sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"; then
+        log "Failed to add Docker repository."
+        exit 1
+    fi
+
+    if ! sudo apt-get update -y; then
+        log "Failed to update Docker package list."
+        exit 1
+    fi
+
+    if ! sudo apt-get install -y docker-ce docker-ce-cli containerd.io; then
+        log "Failed to install Docker."
+        exit 1
+    fi
+
+    sudo systemctl enable --now docker
+    log "Docker installation completed."
+}
+
+add_ssh_key() {
+    log "Setting up SSH key authentication..."
+
+    if [[ ! -f "$HOME/.ssh/id_rsa" ]]; then
+        echo "Generating SSH key..."
+        ssh-keygen -t rsa -b 4096 -f "$HOME/.ssh/id_rsa" -N ""
+    fi
+
+    echo "Copying SSH key to remote server..."
+    ssh-copy-id -i "$HOME/.ssh/id_rsa.pub" "$SUDO_USER@localhost"
+
+    log "SSH key setup completed."
+}
+
+disable_ssh_pw_auth() {
+    log "Disabling password authentication for SSH..."
+
+    sudo sed -i 's/^#PasswordAuthentication yes/PasswordAuthentication no/' /etc/ssh/sshd_config
+    sudo systemctl restart sshd
+    log "Password authentication disabled for SSH."
 }
 
 create_update_cleanup_script() {
@@ -183,29 +256,9 @@ sudo apt-get autoclean -y
 
 # Remove old kernel versions (keep the current and one previous)
 current_kernel=$(uname -r)
-previous_kernel=$(dpkg --list | grep linux-image | awk '{print $2}' | grep -v "$current_kernel" | tail -n 1)
-if [[ -n "$previous_kernel" ]]; then
-    sudo apt-get remove --purge -y "$previous_kernel"
-fi
+sudo apt-get --purge remove "linux-image-*" -y
+sudo apt-get install -y "linux-image-$current_kernel"
 
-# Clear the APT cache
-sudo apt-get clean
-
-# Remove orphaned packages (no longer required)
-sudo deborphan | xargs -r sudo apt-get remove --purge -y
-
-# Remove any old log files
-sudo find /var/log -type f -name '*.log' -delete
-
-# Optional: clear thumbnail cache (if using a desktop environment)
-if [[ -d "$HOME/.cache/thumbnails" ]]; then
-    rm -rf "$HOME/.cache/thumbnails/*"
-fi
-
-# Optional: clear user-specific cache (be careful with this)
-rm -rf "$HOME/.cache/*"
-
-echo "Cleanup complete!"
 EOF
 
     sudo chmod +x /usr/local/bin/update_cleanup.sh
@@ -213,25 +266,14 @@ EOF
 }
 
 configure_bash_aliases() {
-    # Determine the current user's home directory
-    local target_home
-    target_home=$(getent passwd "$SUDO_USER" | cut -d: -f6)
+    log "Configuring Bash aliases..."
 
-    # If SUDO_USER is not set, fall back to the current user's home
-    if [ -z "$target_home" ]; then
-        target_home="$HOME"
+    local alias_file="$HOME/.bash_aliases"
+    if [[ ! -f "$alias_file" ]]; then
+        touch "$alias_file"
     fi
 
-    # Create or append to the .bash_aliases file
-    if [ ! -f "$target_home/.bash_aliases" ]; then
-        touch "$target_home/.bash_aliases"
-        echo "# Custom Bash aliases" >> "$target_home/.bash_aliases"
-    fi
-
-    # Check for existing aliases to avoid duplication
-    if ! grep -q "alias ..='cd ..'" "$target_home/.bash_aliases"; then
-        cat << 'EOF' >> "$target_home/.bash_aliases"
-
+    cat << 'EOF' >> "$alias_file"
 alias ..='cd ..'
 alias ...='cd ../..'
 alias dock='cd ~/.docker/compose'
@@ -241,163 +283,11 @@ alias ddown='docker compose -f ~/.docker/compose/docker-compose.yml down'
 alias dr='docker compose -f ~/.docker/compose/docker-compose.yml restart'
 alias dstart='docker compose -f ~/.docker/compose/docker-compose.yml start'
 alias dstop='docker compose -f ~/.docker/compose/docker-compose.yml stop'
-alias ls='ls --color -Flah'
+alias ls='ls --color -FlahH'
 alias update='/usr/local/bin/update_cleanup.sh'
 EOF
 
-        log "Bash aliases configured in $target_home/.bash_aliases."
-        echo "Bash aliases added to $target_home/.bash_aliases. Run 'source ~/.bash_aliases' to apply changes."
-    else
-        echo "Bash aliases are already configured in $target_home/.bash_aliases."
-    fi
-
-    # Ensure .bashrc sources the .bash_aliases file
-    if ! grep -q "if [ -f $target_home/.bash_aliases ]; then" "$target_home/.bashrc"; then
-        echo "if [ -f $target_home/.bash_aliases ]; then" >> "$target_home/.bashrc"
-        echo "    . $target_home/.bash_aliases" >> "$target_home/.bashrc"
-        echo "fi" >> "$target_home/.bashrc"
-        log ".bashrc updated to source $target_home/.bash_aliases."
-    fi
+    log "Bash aliases added to $alias_file."
 }
 
-install_docker() {
-    echo "Starting Docker installation..."
-
-    # Remove existing Docker-related packages
-    for pkg in docker.io docker-doc docker-compose podman-docker containerd runc; do
-        sudo apt-get remove -y "$pkg"
-    done
-
-    # Update package index
-    sudo apt-get update
-
-    # Install necessary packages
-    sudo apt-get install -y ca-certificates curl
-
-    # Create directory for APT keyrings
-    sudo install -m 0755 -d /etc/apt/keyrings
-
-    # Download Docker GPG key
-    sudo curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc
-
-    # Set permissions for the GPG key
-    sudo chmod a+r /etc/apt/keyrings/docker.asc
-
-    # Add Docker repository to APT sources
-    echo \
-      "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian \
-      $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
-      sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-
-    # Update package index again
-    sudo apt-get update
-
-    # Install Docker packages
-    sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-
-    # Post-installation: Add user to the docker group
-    sudo usermod -aG docker "$USER"
-
-    echo "Docker installation completed successfully."
-    echo "Please log out and back in for the changes to take effect."
-}
-
-# Function to set up SSH key
-sshkey() {
-    # Determine the current user's home directory
-    local target_user target_home
-    target_user="${SUDO_USER:-$USER}"
-    target_home=$(getent passwd "$target_user" | cut -d: -f6)
-
-    # Create .ssh directory if it doesn't exist and set permissions as the target user
-    sudo -u "$target_user" mkdir -p "$target_home/.ssh"
-    sudo -u "$target_user" chmod 700 "$target_home/.ssh"
-
-    # Add the SSH2 public key to authorized_keys in OpenSSH format
-    sudo -u "$target_user" tee -a "$target_home/.ssh/authorized_keys" > /dev/null << 'EOF'
-ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDOeNMeemwPLteWku0Fz/u/LsbfaEPnkbRNZKVY6T9wZlAoxCbtJn1YfBhPFb87a6xYa0mdloH0rQTHVEAOqFidUKc9O2E4p7yMK6994y+8P/xriCgUzl4huyy50MR1a2Ao6M9T9XooFomestkycbHy0Dup+lDNmE8YG/kE243b0uJnHDDsNsn9K8169haugNlcBlUSY638K/u5M7Xz0YPUGCnXxTUVgfrEozyzvv8ZzOieHm2HIzRoLuCUz6cn8vEmXZW075Ae+5L/BQIiZhFCj0uaKGZ7LE3GfDt+eRLK1EWabP+i3R5+ORhLoIybK6JKoLTIyKaTsm+UWxf8rM7v
-EOF
-
-    # Set permissions on authorized_keys as the target user
-    sudo -u "$target_user" chmod 600 "$target_home/.ssh/authorized_keys"
-
-    echo "SSH key has been added to $target_user's authorized_keys."
-}
-
-disable_password_auth() {
-    # Backup the original sshd_config file
-    sudo cp /etc/ssh/sshd_config /etc/ssh/sshd_config.bak
-
-    # Modify the sshd_config file to disable password authentication
-    echo "Disabling password authentication in /etc/ssh/sshd_config..."
-    
-    # Check if the file contains the PasswordAuthentication line and update it
-    if grep -q "^PasswordAuthentication" /etc/ssh/sshd_config; then
-        sudo sed -i 's/^PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
-    else
-        echo "PasswordAuthentication no" | sudo tee -a /etc/ssh/sshd_config
-    fi
-
-    # Disable ChallengeResponseAuthentication as well
-    if grep -q "^ChallengeResponseAuthentication" /etc/ssh/sshd_config; then
-        sudo sed -i 's/^ChallengeResponseAuthentication.*/ChallengeResponseAuthentication no/' /etc/ssh/sshd_config
-    else
-        echo "ChallengeResponseAuthentication no" | sudo tee -a /etc/ssh/sshd_config
-    fi
-
-    # Restart the SSH service to apply the changes
-    echo "Restarting SSH service..."
-    sudo systemctl restart ssh
-
-    echo "Password authentication has been disabled. Please test your SSH key login."
-}
-
-main() {
-    log "Starting setup script..."
-
-    if prompt_to_proceed "Would you like to change the hostname?"; then
-        read -p "Enter new hostname: " NEW_HOSTNAME
-        set_hostname "y" "$NEW_HOSTNAME"
-    fi
-
-    if prompt_to_proceed "Would you like to install necessary packages?"; then
-        install_packages
-    fi
-
-    if prompt_to_proceed "Would you like to share the home directory via Samba?"; then
-        share_home_directory
-    fi
-
-    if prompt_to_proceed "Would you like to set up Samba shares?"; then
-        setup_samba_shares
-    fi
-
-    if prompt_to_proceed "Would you like to configure DNS settings for Pi-hole?"; then
-        configure_dns
-    fi
-
-    if prompt_to_proceed "Would you like to create a system update/cleanup script?"; then
-        create_update_cleanup_script
-    fi
-
-    if prompt_to_proceed "Would you like to configure Bash aliases?"; then
-        configure_bash_aliases
-    fi
- 
-    if prompt_to_proceed "Would you like to configure Docker?"; then
-        install_docker
-    fi
-	
-	if prompt_to_proceed "Would you like to install your public SSH key?"; then
-        sshkey
-    fi
-	
-	if prompt_to_proceed "Would you like to disable SSH pw authentication?"; then
-        disable_password_auth
-    fi
-
-    log "Setup script completed."
-    echo "Setup script completed. Check $SETUP_LOG for details."
-}
-
-main "$@"
+menu
