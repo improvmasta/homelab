@@ -1,17 +1,30 @@
 #!/bin/bash
 
-# Log file path
+# Default values
 LOG_FILE="/var/log/proxmox_setup.log"
-
-# SSH key to be added
 SSH_KEY="ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDOeNMeemwPLteWku0Fz/u/LsbfaEPnkbRNZKVY6T9wZlAoxCbtJn1YfBhPFb87a6xYa0mdloH0rQTHVEAOqFidUKc9O2E4p7yMK6994y+8P/xriCgUzl4huyy50MR1a2Ao6M9T9XooFomestkycbHy0Dup+lDNmE8YG/kE243b0uJnHDDsNsn9K8169haugNlcBlUSY638K/u5M7Xz0YPUGCnXxTUVgfrEozyzvv8ZzOieHm2HIzRoLuCUz6cn8vEmXZW075Ae+5L/BQIiZhFCj0uaKGZ7LE3GfDt+eRLK1EWabP+i3R5+ORhLoIybK6JKoLTIyKaTsm+UWxf8rM7v"
-
-# Define the backup directory
 BACKUP_DIR="/media/f/backup/vm/prox"
 
 # Function to log errors
 log_error() {
     echo "$(date '+%Y-%m-%d %H:%M:%S') [ERROR] $1" | tee -a "$LOG_FILE"
+}
+
+# Function to change variables
+change_variables() {
+    echo "Current SSH key: $SSH_KEY"
+    read -p "Enter a new SSH key (leave empty to keep the current one): " new_ssh_key
+    if [ -n "$new_ssh_key" ]; then
+        SSH_KEY="$new_ssh_key"
+        echo "SSH key updated."
+    fi
+
+    echo "Current backup directory: $BACKUP_DIR"
+    read -p "Enter a new backup directory (leave empty to keep the current one): " new_backup_dir
+    if [ -n "$new_backup_dir" ]; then
+        BACKUP_DIR="$new_backup_dir"
+        echo "Backup directory updated."
+    fi
 }
 
 # Function to install necessary packages
@@ -61,6 +74,7 @@ update_pveam_templates() {
 
 # Function to create a user, install sudo, and add to sudoers
 create_user_and_add_to_sudoers() {
+    echo "Creating user and adding to sudoers..."
     read -p "Enter the new non-root username: " new_user
     useradd -m -s /bin/bash "$new_user" && passwd "$new_user"
     usermod -aG sudo "$new_user"
@@ -76,9 +90,11 @@ create_user_and_add_to_sudoers() {
 
 # Function to import ZFS pool
 import_zfs_pool() {
-    read -p "Do you want to import a ZFS pool? (yes/no): " import_zfs
+    echo "Do you want to import a ZFS pool? (yes/no): "
+    read import_zfs
     if [[ "$import_zfs" =~ ^(yes|y)$ ]]; then
-        read -p "Enter the ZFS pool name: " pool_name
+        echo "Enter the ZFS pool name: "
+        read pool_name
         if zpool import "$pool_name"; then
             echo "ZFS pool $pool_name imported."
         else
@@ -90,11 +106,11 @@ import_zfs_pool() {
 
 # Function to configure fstab mounts
 configure_fstab_mounts() {
-    local mounts=(
-        'UUID="A8BADD47BADD1324" /media/d ntfs rw 0 0'
-        'UUID="5E1E45AD1E457F51" /media/e ntfs rw 0 0'
-        'UUID="123456781E457F51" /media/f ntfs rw 0 0'
-        'UUID="a4b151c8-68b0-4a3a-abc7-b2aa1cfbbcaf" /media/vmb ext4 rw 0 0'
+    local mounts=( 
+        'UUID="A8BADD47BADD1324" /media/d ntfs rw 0 0' 
+        'UUID="5E1E45AD1E457F51" /media/e ntfs rw 0 0' 
+        'UUID="123456781E457F51" /media/f ntfs rw 0 0' 
+        'UUID="a4b151c8-68b0-4a3a-abc7-b2aa1cfbbcaf" /media/vmb ext4 rw 0 0' 
     )
     local directories=("/media/d" "/media/e" "/media/f" "/media/vmb")
 
@@ -112,11 +128,22 @@ configure_fstab_mounts() {
     mount -a && echo "fstab mounts configured."
 }
 
-# Function to restore the most recent backup (only VM and storage files)
+# Function to restore from backup
 restore_configs() {
-    read -p "Do you want to restore from the most recent backup? (yes/no): " restore_choice
+    # Use the default backup directory from the beginning of the script
+    default_backup_dir="$BACKUP_DIR"
+
+    echo "Do you want to restore from the most recent backup? (yes/no): "
+    read restore_choice
     if [[ "$restore_choice" =~ ^(yes|y)$ ]]; then
-        read -p "Enter the backup folder path (where the backups are stored): " backup_folder
+        echo "Do you want to use the default backup directory: $default_backup_dir? (yes/no): "
+        read use_default_dir
+        if [[ ! "$use_default_dir" =~ ^(yes|y)$ ]]; then
+            echo "Enter the backup folder path (where the backups are stored): "
+            read backup_folder
+        else
+            backup_folder="$default_backup_dir"
+        fi
 
         if [ -d "$backup_folder" ]; then
             # Find the most recent backup file
@@ -126,7 +153,8 @@ restore_configs() {
                 echo "Restoring from the most recent backup: $backup_file"
 
                 # Ask for the hostname where the configurations should be restored
-                read -p "Enter the hostname for the Proxmox node: " hostname
+                echo "Enter the hostname for the Proxmox node: "
+                read hostname
 
                 # Ensure the specified hostname exists under the nodes directory
                 if [ -d "/etc/pve/nodes/$hostname" ]; then
@@ -157,7 +185,8 @@ restore_configs() {
 
 # Function to set up Bash aliases for root
 setup_bash_aliases() {
-    read -p "Do you want to set up bash aliases for root? (yes/no): " setup_aliases
+    echo "Do you want to set up bash aliases for root? (yes/no): "
+    read setup_aliases
     if [[ "$setup_aliases" =~ ^(yes|y)$ ]]; then
         echo "Setting up bash aliases for root..."
 
@@ -165,25 +194,17 @@ setup_bash_aliases() {
 # Custom bash aliases
 alias ..='cd ..'
 alias ...='cd ../..'
-alias dock='cd ~/.docker/compose'
-alias dc='cd ~/.config/appdata/'
-alias dup='docker compose -f ~/.docker/compose/docker-compose.yml up -d'
-alias ddown='docker compose -f ~/.docker/compose/docker-compose.yml down'
-alias dr='docker compose -f ~/.docker/compose/docker-compose.yml restart'
-alias dstart='docker compose -f ~/.docker/compose/docker-compose.yml start'
-alias dstop='docker compose -f ~/.docker/compose/docker-compose.yml stop'
-alias ls='ls --color -FlahH'
-alias update='/usr/local/bin/update_cleanup.sh'
+alias ..b='cd ~'
 EOF
-        echo "Bash aliases for root set up in /root/.bash_aliases."
+
+        chmod 644 /root/.bash_aliases
+        echo "Bash aliases set up for root."
     fi
 }
 
 # Function to create the update and cleanup script
 create_update_cleanup_script() {
-    read -p "Do you want to create the update and cleanup script? (yes/no): " create_script
-    if [[ "$create_script" =~ ^(yes|y)$ ]]; then
-        cat << 'EOF' | tee /usr/local/bin/update > /dev/null
+    cat << 'EOF' | tee /usr/local/bin/update > /dev/null
 #!/bin/bash
 
 # Update and upgrade the system packages
@@ -197,17 +218,13 @@ current_kernel=$(uname -r)
 previous_kernel=$(dpkg --list | grep linux-image | awk '{print $2}' | grep -v "$current_kernel" | tail -n 1)
 [[ -n "$previous_kernel" ]] && apt-get remove --purge -y "$previous_kernel"
 EOF
-        chmod +x /usr/local/bin/update
-        echo "Update and cleanup script created at /usr/local/bin/update."
-    fi
+    chmod +x /usr/local/bin/update
+    echo "Update and cleanup script created at /usr/local/bin/update."
 }
 
 # Function to create the backup script
 create_backup_script() {
-    # Create the backup directory if it doesn't exist
     mkdir -p "$BACKUP_DIR"
-
-    # Create the backup script content
     cat << EOF > /usr/local/bin/proxmox_backup.sh
 #!/bin/bash
 
@@ -227,27 +244,19 @@ tar -czf "\$BACKUP_FILE" -C /etc pve
 find "\$BACKUP_DIR" -type f -name "proxmox_backup_*.tar.gz" -mtime +6 -exec rm -f {} \;
 
 # Keep one monthly backup (first backup of the month)
-# Find the oldest backup from the current month and remove others
-# Backup files are named like proxmox_backup_YYYY-MM-DD_HH-MM-SS.tar.gz
 MONTHLY_BACKUP=\$(ls "\$BACKUP_DIR"/proxmox_backup_\$(date +\%Y-\%m)*.tar.gz | sort | head -n 1)
 find "\$BACKUP_DIR" -type f -name "proxmox_backup_\$(date +\%Y-\%m)*.tar.gz" | grep -v "\$MONTHLY_BACKUP" | xargs rm -f
 
 echo "Backup completed successfully: \$BACKUP_FILE"
 EOF
-
-    # Make the backup script executable
     chmod +x /usr/local/bin/proxmox_backup.sh
-
     echo "Backup script created at /usr/local/bin/proxmox_backup.sh"
 }
 
 # Function to set up a cron job for daily backups at 12 AM
 setup_backup_cron() {
-    # Check if the cron job already exists
     cron_job="0 0 * * * /usr/local/bin/proxmox_backup.sh"
-
     if ! crontab -l | grep -q "$cron_job"; then
-        # Add the cron job if it doesn't exist
         (crontab -l 2>/dev/null; echo "$cron_job") | crontab -
         echo "Cron job set up to run backup every day at 12:00 AM."
     else
@@ -255,21 +264,61 @@ setup_backup_cron() {
     fi
 }
 
+# Main function to run all functions
+run_all() {
+    echo "Running all steps..."
+    install_packages
+    configure_repositories
+    update_pveam_templates
+    create_user_and_add_to_sudoers
+    import_zfs_pool
+    configure_fstab_mounts
+    restore_configs
+    setup_bash_aliases
+    create_update_cleanup_script
+    create_backup_script
+    setup_backup_cron
+    echo "All functions completed."
+}
 
-# Main script execution starts here
-echo "Starting Proxmox server setup..."
+# Function to handle menu options
+main_menu() {
+    clear
+    echo "Proxmox Server Setup - Main Menu"
+    echo "1. Run All Functions (with prompts)"
+    echo "2. Install Packages"
+    echo "3. Configure Repositories"
+    echo "4. Update Proxmox Appliance Templates"
+    echo "5. Create User and Add to Sudoers"
+    echo "6. Import ZFS Pool"
+    echo "7. Configure fstab Mounts"
+    echo "8. Restore from Backup"
+    echo "9. Set Up Bash Aliases"
+    echo "10. Change Variables"
+    echo "11. Create Update and Cleanup Script"
+    echo "12. Create Backup Script"
+    echo "13. Set Up Backup Cron"
+    echo "14. Exit"
+    read -p "Choose an option (1-14): " choice
 
-# Perform each setup step in sequence
-install_packages
-configure_repositories
-update_pveam_templates
-create_user_and_add_to_sudoers
-import_zfs_pool
-configure_fstab_mounts
-restore_configs
-setup_bash_aliases
-create_update_cleanup_script
-create_backup_script
-setup_backup_cron
+    case $choice in
+        1) run_all ;;
+        2) install_packages ;;
+        3) configure_repositories ;;
+        4) update_pveam_templates ;;
+        5) create_user_and_add_to_sudoers ;;
+        6) import_zfs_pool ;;
+        7) configure_fstab_mounts ;;
+        8) restore_configs ;;
+        9) setup_bash_aliases ;;
+        10) change_variables ;;
+        11) create_update_cleanup_script ;;
+        12) create_backup_script ;;
+        13) setup_backup_cron ;;
+        14) exit 0 ;;
+        *) echo "Invalid choice. Please choose between 1 and 14."; main_menu ;;
+    esac
+}
 
-echo "Proxmox server setup completed successfully."
+# Call the main menu function
+main_menu
