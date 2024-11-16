@@ -29,7 +29,7 @@ change_variables() {
 
 # Function to install necessary packages
 install_packages() {
-    local packages=("ntfs-3g" "sudo")
+    local packages=("ntfs-3g" "sudo" "net-tools" "gcc" "make" "perl" "samba" "cifs-utils" "winbind" "curl" "git" "bzip2" "tar")
     echo "Installing required packages: ${packages[@]}..."
     if apt-get update && apt-get install -y "${packages[@]}"; then
         echo "Packages installed successfully."
