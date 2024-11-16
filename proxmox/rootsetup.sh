@@ -28,7 +28,7 @@ configure_repositories() {
     echo "Configuring repositories..."
     sed -i 's/^deb/deb#/' /etc/apt/sources.list.d/pve-enterprise.list
     echo "deb http://download.proxmox.com/debian/pve stretch pve-no-subscription" > /etc/apt/sources.list.d/pve-no-subscription.list
-    apt-get update -y
+    apt-get update -y && apt-get upgrade -y
 }
 
 # Function to update Proxmox appliance templates
