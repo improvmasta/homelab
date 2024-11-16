@@ -6,6 +6,9 @@ LOG_FILE="/var/log/proxmox_setup.log"
 # SSH key to be added
 SSH_KEY="ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDOeNMeemwPLteWku0Fz/u/LsbfaEPnkbRNZKVY6T9wZlAoxCbtJn1YfBhPFb87a6xYa0mdloH0rQTHVEAOqFidUKc9O2E4p7yMK6994y+8P/xriCgUzl4huyy50MR1a2Ao6M9T9XooFomestkycbHy0Dup+lDNmE8YG/kE243b0uJnHDDsNsn9K8169haugNlcBlUSY638K/u5M7Xz0YPUGCnXxTUVgfrEozyzvv8ZzOieHm2HIzRoLuCUz6cn8vEmXZW075Ae+5L/BQIiZhFCj0uaKGZ7LE3GfDt+eRLK1EWabP+i3R5+ORhLoIybK6JKoLTIyKaTsm+UWxf8rM7v"
 
+# Define the backup directory
+BACKUP_DIR="/media/f/backup/vm/prox"
+
 # Function to log errors
 log_error() {
     echo "$(date '+%Y-%m-%d %H:%M:%S') [ERROR] $1" | tee -a "$LOG_FILE"
@@ -26,9 +29,22 @@ install_packages() {
 # Function to configure repositories
 configure_repositories() {
     echo "Configuring repositories..."
-    sed -i 's/^deb/deb#/' /etc/apt/sources.list.d/pve-enterprise.list
-    echo "deb http://download.proxmox.com/debian/pve stretch pve-no-subscription" > /etc/apt/sources.list.d/pve-no-subscription.list
-    apt-get update -y && apt-get upgrade -y
+    sudo cp /etc/apt/sources.list /etc/apt/sources.list.backup
+
+    sudo tee /etc/apt/sources.list > /dev/null << EOF
+deb http://ftp.debian.org/debian bookworm main contrib
+deb http://ftp.debian.org/debian bookworm-updates main contrib
+
+# Proxmox VE pve-no-subscription repository provided by proxmox.com,
+# NOT recommended for production use
+deb http://download.proxmox.com/debian/pve bookworm pve-no-subscription
+
+# security updates
+deb http://security.debian.org/debian-security bookworm-security main contrib
+EOF
+
+    sudo apt-get update -y && sudo apt-get upgrade -y
+    echo "Repositories configured and system updated."
 }
 
 # Function to update Proxmox appliance templates
@@ -49,8 +65,7 @@ create_user_and_add_to_sudoers() {
     useradd -m -s /bin/bash "$new_user" && passwd "$new_user"
     usermod -aG sudo "$new_user"
     echo "$new_user created and added to sudoers."
-    
-    # Add SSH key to both root and new user's authorized_keys
+
     mkdir -p /root/.ssh /home/"$new_user"/.ssh
     echo "$SSH_KEY" >> /root/.ssh/authorized_keys
     echo "$SSH_KEY" >> /home/"$new_user"/.ssh/authorized_keys
@@ -97,19 +112,31 @@ configure_fstab_mounts() {
     mount -a && echo "fstab mounts configured."
 }
 
-# Function to import VM/Container and storage configurations
-import_configs() {
-    read -p "Do you want to provide an import folder for /pve? (yes/no): " import_folder
-    if [[ "$import_folder" =~ ^(yes|y)$ ]]; then
-        read -p "Enter the path to the import folder: " import_path
-        if [ -d "$import_path" ]; then
-            # Check and copy VM and LXC configurations
-            [ -d "$import_path/qemu-server" ] && cp -r "$import_path/qemu-server"/* /etc/pve/qemu-server/
-            [ -d "$import_path/lxc" ] && cp -r "$import_path/lxc"/* /etc/pve/lxc/
-            [ -f "$import_path/storage.cfg" ] && cp "$import_path/storage.cfg" /etc/pve/
-            echo "VM, container, and storage configurations imported from $import_path."
+# Function to restore the most recent backup
+restore_configs() {
+    read -p "Do you want to restore from the most recent backup? (yes/no): " restore_choice
+    if [[ "$restore_choice" =~ ^(yes|y)$ ]]; then
+        read -p "Enter the backup folder path (where the backups are stored): " backup_folder
+
+        if [ -d "$backup_folder" ]; then
+            backup_file=$(ls -t "$backup_folder"/proxmox_backup_*.tar.gz | head -n 1)
+
+            if [ -f "$backup_file" ]; then
+                echo "Restoring from the most recent backup: $backup_file"
+                tar -xzf "$backup_file" -C /etc pve
+
+                if [ -d "/etc/pve/qemu-server" ] && [ -d "/etc/pve/lxc" ] && [ -f "/etc/pve/storage.cfg" ]; then
+                    echo "Restoration successful!"
+                else
+                    log_error "Restoration failed. Backup may be incomplete."
+                    echo "Error: Restoration failed."
+                fi
+            else
+                log_error "No backup files found in $backup_folder."
+                echo "Error: No valid backup files found."
+            fi
         else
-            log_error "Invalid import folder: $import_path"
+            log_error "Invalid backup folder: $backup_folder"
             echo "Error: Folder not found."
         fi
     fi
@@ -139,6 +166,7 @@ EOF
     fi
 }
 
+# Function to create the update and cleanup script
 create_update_cleanup_script() {
     read -p "Do you want to create the update and cleanup script? (yes/no): " create_script
     if [[ "$create_script" =~ ^(yes|y)$ ]]; then
@@ -155,86 +183,80 @@ apt-get autoremove -y && apt-get autoclean -y
 current_kernel=$(uname -r)
 previous_kernel=$(dpkg --list | grep linux-image | awk '{print $2}' | grep -v "$current_kernel" | tail -n 1)
 [[ -n "$previous_kernel" ]] && apt-get remove --purge -y "$previous_kernel"
-
-# Clean APT cache, remove orphaned packages, and old log files
-apt-get clean && deborphan | xargs -r apt-get remove --purge -y
-find /var/log -type f -name '*.log' -delete
-
-# Optional: clear thumbnail and user-specific cache
-rm -rf "$HOME/.cache/thumbnails/*" "$HOME/.cache/*"
-
-echo "Update and cleanup complete!"
 EOF
-
         chmod +x /usr/local/bin/update
-        chmod 755 /usr/local/bin/update
-        log "Update and cleanup script created at /usr/local/bin/update and is executable by all users."
-    else
-        echo "Skipping script creation."
+        echo "Update and cleanup script created at /usr/local/bin/update."
     fi
 }
 
-# Example call to create the update and cleanup script
-create_update_cleanup_script
+# Function to create the backup script
+create_backup_script() {
+    # Create the backup directory if it doesn't exist
+    mkdir -p "$BACKUP_DIR"
 
-
-# Function to set up a backup cron job
-setup_backup_cron() {
-    read -p "Do you want to set up a daily backup cron job? (yes/no): " backup_cron
-    if [[ "$backup_cron" =~ ^(yes|y)$ ]]; then
-        read -p "Enter the backup folder path (where backups will be stored): " backup_folder
-
-        if [ -d "$backup_folder" ]; then
-            backup_script="/usr/local/bin/proxmox_backup.sh"
-            echo "Creating backup script at $backup_script..."
-
-            cat > "$backup_script" << EOF
+    # Create the backup script content
+    cat << EOF > /usr/local/bin/proxmox_backup.sh
 #!/bin/bash
-# Proxmox backup script
 
 # Variables
-BACKUP_DIR="$backup_folder"
+BACKUP_DIR="/media/f/backup/vm/prox"
 DATE=\$(date +\%Y-\%m-\%d_\%H-\%M-\%S)
-VM_BACKUP_DIR="\$BACKUP_DIR/vm_backups"
-LXC_BACKUP_DIR="\$BACKUP_DIR/lxc_backups"
-STORAGE_BACKUP_DIR="\$BACKUP_DIR/storage_backups"
+BACKUP_FILE="\$BACKUP_DIR/proxmox_backup_\$DATE.tar.gz"
 
-# Create backup directories if they don't exist
-mkdir -p "\$VM_BACKUP_DIR" "\$LXC_BACKUP_DIR" "\$STORAGE_BACKUP_DIR"
+# Create backup directory if it doesn't exist
+mkdir -p "\$BACKUP_DIR"
 
-# Backup VM files
-cp -r /etc/pve/qemu-server/\* "\$VM_BACKUP_DIR/\$DATE" 2>/dev/null
-cp -r /etc/pve/lxc/\* "\$LXC_BACKUP_DIR/\$DATE" 2>/dev/null
-cp /etc/pve/storage.cfg "\$STORAGE_BACKUP_DIR/\$DATE" 2>/dev/null
+# Backup /etc/pve (VM and storage configurations) while retaining the directory structure
+echo "Backing up VM and storage configuration files to \$BACKUP_FILE..."
+tar -czf "\$BACKUP_FILE" -C /etc pve
 
-# Keep only 7 backups, delete older ones
-find "\$VM_BACKUP_DIR" -type d -mtime +6 -exec rm -rf {} \;
-find "\$LXC_BACKUP_DIR" -type d -mtime +6 -exec rm -rf {} \;
-find "\$STORAGE_BACKUP_DIR" -type f -mtime +6 -exec rm -f {} \;
+# Remove backups older than 7 days (daily backups)
+find "\$BACKUP_DIR" -type f -name "proxmox_backup_*.tar.gz" -mtime +6 -exec rm -f {} \;
+
+# Keep one monthly backup (first backup of the month)
+# Find the oldest backup from the current month and remove others
+# Backup files are named like proxmox_backup_YYYY-MM-DD_HH-MM-SS.tar.gz
+MONTHLY_BACKUP=\$(ls "\$BACKUP_DIR"/proxmox_backup_\$(date +\%Y-\%m)*.tar.gz | sort | head -n 1)
+find "\$BACKUP_DIR" -type f -name "proxmox_backup_\$(date +\%Y-\%m)*.tar.gz" | grep -v "\$MONTHLY_BACKUP" | xargs rm -f
+
+echo "Backup completed successfully: \$BACKUP_FILE"
 EOF
 
-            chmod +x "$backup_script"
+    # Make the backup script executable
+    chmod +x /usr/local/bin/proxmox_backup.sh
 
-            # Add cron job
-            (crontab -l 2>/dev/null; echo "0 0 * * * $backup_script") | crontab -
-            echo "Backup cron job set to run every day at 12:00 AM."
-        else
-            log_error "Invalid backup folder: $backup_folder"
-            echo "Error: Folder not found."
-        fi
+    echo "Backup script created at /usr/local/bin/proxmox_backup.sh"
+}
+
+# Function to set up a cron job for daily backups at 12 AM
+setup_backup_cron() {
+    # Check if the cron job already exists
+    cron_job="0 0 * * * /usr/local/bin/proxmox_backup.sh"
+
+    if ! crontab -l | grep -q "$cron_job"; then
+        # Add the cron job if it doesn't exist
+        (crontab -l 2>/dev/null; echo "$cron_job") | crontab -
+        echo "Cron job set up to run backup every day at 12:00 AM."
+    else
+        echo "Cron job already exists. Skipping cron setup."
     fi
 }
 
-# Main script execution
+
+# Main script execution starts here
+echo "Starting Proxmox server setup..."
+
+# Perform each setup step in sequence
 install_packages
 configure_repositories
 update_pveam_templates
 create_user_and_add_to_sudoers
 import_zfs_pool
 configure_fstab_mounts
-import_configs
+restore_configs
 setup_bash_aliases
 create_update_cleanup_script
+create_backup_script
 setup_backup_cron
 
-echo "Proxmox setup complete."
+echo "Proxmox server setup completed successfully."
