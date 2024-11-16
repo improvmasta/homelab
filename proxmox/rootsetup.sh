@@ -21,6 +21,31 @@ install_ntfs3g() {
     fi
 }
 
+# Function to add the no-subscription repository and disable the enterprise repository
+configure_repositories() {
+    echo "Configuring repositories..."
+
+    # Disable the enterprise repository by commenting out the line in /etc/apt/sources.list.d/pve-enterprise.list
+    if [ -f "/etc/apt/sources.list.d/pve-enterprise.list" ]; then
+        echo "Disabling enterprise repository..."
+        sed -i 's/^deb/deb#/' /etc/apt/sources.list.d/pve-enterprise.list
+    fi
+
+    # Add the no-subscription repository
+    echo "Adding no-subscription repository..."
+    echo "deb http://download.proxmox.com/debian/pve stretch pve-no-subscription" > /etc/apt/sources.list.d/pve-no-subscription.list
+
+    # Update apt sources
+    echo "Updating apt sources..."
+    apt-get update -y
+}
+
+# Function to run pveam update
+update_pveam() {
+    echo "Running pveam update..."
+    pveam update
+}
+
 # Function to import a ZFS pool
 import_zfs_pool() {
     read -p "Do you want to import a ZFS pool? (yes/no): " import_zfs
@@ -152,6 +177,12 @@ main() {
         echo "Error: Cannot write to log file at $LOG_FILE. Check permissions."
         exit 1
     fi
+
+    # Add the no-subscription repository and disable the enterprise repository
+    configure_repositories
+
+    # Update Proxmox appliance templates
+    update_pveam
 
     install_ntfs3g
     import_zfs_pool
