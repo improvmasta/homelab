@@ -237,25 +237,28 @@ create_backup_script() {
 #!/bin/bash
 
 # Variables
-BACKUP_DIR="/media/f/backup/vm/prox"
-DATE=\$(date +\%Y-\%m-\%d_\%H-\%M-\%S)
-BACKUP_FILE="\$BACKUP_DIR/proxmox_backup_\$DATE.tar.gz"
+BACKUP_DIR="${BACKUP_DIR:-/media/f/backup/vm/prox}"  # Default to /media/f/backup/vm/prox if not set
+DATE=$(date +%Y-%m-%d_%H-%M-%S)
+BACKUP_FILE="$BACKUP_DIR/proxmox_backup_$DATE.tar.gz"
 
-# Create backup directory if it doesn't exist
-mkdir -p "\$BACKUP_DIR"
+# Ensure backup directory exists
+echo "Ensuring backup directory exists: $BACKUP_DIR"
+mkdir -p "$BACKUP_DIR" || { echo "Failed to create $BACKUP_DIR"; exit 1; }
 
-# Backup /etc/pve (VM and storage configurations) while retaining the directory structure
-echo "Backing up PVE files to \$BACKUP_FILE..."
-tar -czf "\$BACKUP_FILE" -C /etc pve
+# Prune old backups: Remove backups older than 7 days
+echo "Pruning backups older than 7 days..."
+find "$BACKUP_DIR" -type f -name "proxmox_backup_*.tar.gz" -mtime +6 -exec rm -f {} \;
 
-# Remove backups older than 7 days (daily backups)
-find "\$BACKUP_DIR" -type f -name "proxmox_backup_*.tar.gz" -mtime +6 -exec rm -f {} \;
+# Backup /etc/pve (VM and storage configurations)
+echo "Starting backup of /etc/pve to $BACKUP_FILE..."
+tar -czf "$BACKUP_FILE" -C /etc pve
+if [ $? -ne 0 ]; then
+    echo "Backup failed!"
+    exit 1
+fi
 
-# Keep one monthly backup (first backup of the month)
-MONTHLY_BACKUP=\$(ls "\$BACKUP_DIR"/proxmox_backup_\$(date +\%Y-\%m)*.tar.gz | sort | head -n 1)
-find "\$BACKUP_DIR" -type f -name "proxmox_backup_\$(date +\%Y-\%m)*.tar.gz" | grep -v "\$MONTHLY_BACKUP" | xargs rm -f
-
-echo "Backup completed successfully: \$BACKUP_FILE"
+# Confirm the file was created
+echo "Backup created: $BACKUP_FILE"
 EOF
     chmod +x /usr/local/bin/proxmox_backup.sh
     echo "Backup script created at /usr/local/bin/proxmox_backup.sh"
