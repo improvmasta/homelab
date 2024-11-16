@@ -366,41 +366,45 @@ run_all() {
 
 # Function to handle menu options
 main_menu() {
-    clear
-    echo "Proxmox Server Setup - Main Menu"
-    echo "1. Run All Functions (with prompts)"
-    echo "2. Install Packages"
-    echo "3. Configure Repositories"
-    echo "4. Update Proxmox Appliance Templates"
-    echo "5. Create User and Add to Sudoers"
-    echo "6. Import ZFS Pool"
-    echo "7. Configure fstab Mounts"
-    echo "8. Restore from Backup"
-    echo "9. Set Up Bash Aliases"
-    echo "10. Change Variables"
-    echo "11. Create Update and Cleanup Script"
-    echo "12. Create Backup Script"
-    echo "13. Set Up Backup Cron"
-    echo "14. Exit"
-    read -p "Choose an option (1-14): " choice
+    while true; do  # Keep the menu running until the user chooses to exit
+        clear
+        echo "Proxmox Server Setup - Main Menu"
+        echo "1. Run All Functions (with prompts)"
+        echo "2. Install Packages"
+        echo "3. Configure Repositories"
+        echo "4. Update Proxmox Appliance Templates"
+        echo "5. Create User and Add to Sudoers"
+        echo "6. Import ZFS Pool"
+        echo "7. Configure fstab Mounts"
+        echo "8. Restore from Backup"
+        echo "9. Set Up Bash Aliases"
+        echo "10. Change Variables"
+        echo "11. Create Update and Cleanup Script"
+        echo "12. Create Backup Script"
+        echo "13. Set Up Backup Cron"
+        echo "14. Exit"
+        read -p "Choose an option (1-14): " choice
 
-    case $choice in
-        1) run_all ;;
-        2) install_packages ;;
-        3) configure_repositories ;;
-        4) update_pveam_templates ;;
-        5) create_user_and_add_to_sudoers ;;
-        6) import_zfs_pool ;;
-        7) configure_fstab_mounts ;;
-        8) restore_configs ;;
-        9) setup_bash_aliases ;;
-        10) change_variables ;;
-        11) create_update_cleanup_script ;;
-        12) create_backup_script ;;
-        13) setup_backup_cron ;;
-        14) exit 0 ;;
-        *) echo "Invalid choice. Please choose between 1 and 14."; main_menu ;;
-    esac
+        case $choice in
+            1) run_all ;;
+            2) install_packages ;;
+            3) configure_repositories ;;
+            4) update_pveam_templates ;;
+            5) create_user_and_add_to_sudoers ;;
+            6) import_zfs_pool ;;
+            7) configure_fstab_mounts ;;
+            8) restore_configs ;;
+            9) setup_bash_aliases ;;
+            10) change_variables ;;
+            11) create_update_cleanup_script ;;
+            12) create_backup_script ;;
+            13) setup_backup_cron ;;
+            14) echo "Exiting..."; exit 0 ;;
+            *) echo "Invalid choice. Please choose between 1 and 14." ;;
+        esac
+        # Optionally wait for the user to press a key to continue before showing the menu again
+        read -p "Press Enter to continue..." 
+    done
 }
 
 # Call the main menu function
