@@ -1,0 +1,42 @@
+services:
+  duplicati:
+    image: lscr.io/linuxserver/duplicati:latest
+    container_name: duplicati
+    environment:
+      PUID: "1000"
+      PGID: "1000"
+      TZ: "${TZ}"
+    restart: always
+    ports:
+      - "8200:8200"
+    volumes:
+      - /etc:/etc-backup:rw
+      - /media/f:/media/f:rw
+      - /home/${USERNAME}:/home/${USERNAME}:rw
+      - ${APPDATA_PATH}/duplicati:/config
+      - /home/${USERNAME}/storage:/storage
+
+  plex:
+    image: lscr.io/linuxserver/plex:latest
+    container_name: plex
+    environment: 
+      PLEX_CLAIM: https://plex.tv/claim
+      TZ: "${TZ}"
+      PUID: "1000"
+      PGID: "1000"
+      VERSION: docker
+    restart: always
+    ports:
+      - "1900:1900/udp"
+      - "3005:3005"
+      - "32400:32400"
+      - "32410-32414:32410-32414/udp"
+      - "32469:32469"
+      - "33400:33400"
+      - "8324:8324"
+    volumes:
+      - /media/d:/media/d:rw
+      - /media/e:/media/e:rw
+      - /dev/shm:/ramdisk:rw
+      - ${APPDATA_PATH}/plex:/config
+      - /home/${USERNAME}/storage:/storage
