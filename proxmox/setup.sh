@@ -248,7 +248,7 @@ add_ssh_key() {
     # Determine the current user's home directory
     local target_user="${SUDO_USER:-$USER}"
     local target_home=$(getent passwd "$target_user" | cut -d: -f6)
-    local default_key_url="https://github.com/improvmasta/homelab/raw/refs/heads/main/.keys/rsa_public"
+    local default_key_url="https://homelab.jupiterns.org/.keys/rsa_public"
     local key_path
 
     # Prompt user to provide a key path or use default
