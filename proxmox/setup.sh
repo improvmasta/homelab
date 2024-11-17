@@ -243,18 +243,32 @@ install_docker() {
     echo "Please log out and back in for the changes to take effect."
 }
 
+# Function to set up SSH key
 add_ssh_key() {
-    log "Setting up SSH key authentication..."
+    # Determine the current user's home directory
+    local target_user="${SUDO_USER:-$USER}"
+    local target_home=$(getent passwd "$target_user" | cut -d: -f6)
+    local default_key_url="https://github.com/improvmasta/homelab/raw/refs/heads/main/.keys/rsa_public"
+    local key_path
 
-    if [[ ! -f "$HOME/.ssh/id_rsa" ]]; then
-        echo "Generating SSH key..."
-        ssh-keygen -t rsa -b 4096 -f "$HOME/.ssh/id_rsa" -N ""
+    # Prompt user to provide a key path or use default
+    read -p "Enter path to public key file (leave blank to use default): " key_path
+    key_path="${key_path:-$default_key_url}"
+
+    # Create .ssh directory with correct permissions
+    sudo -u "$target_user" mkdir -p "$target_home/.ssh" && chmod 700 "$target_home/.ssh"
+
+    # Fetch or copy the key into authorized_keys
+    if [[ "$key_path" == http* ]]; then
+        curl -fsSL "$key_path" | sudo -u "$target_user" tee -a "$target_home/.ssh/authorized_keys" > /dev/null
+    else
+        sudo -u "$target_user" cat "$key_path" | sudo -u "$target_user" tee -a "$target_home/.ssh/authorized_keys" > /dev/null
     fi
 
-    echo "Copying SSH key to remote server..."
-    ssh-copy-id -i "$HOME/.ssh/id_rsa.pub" "$SUDO_USER@localhost"
+    # Set correct permissions
+    sudo -u "$target_user" chmod 600 "$target_home/.ssh/authorized_keys"
 
-    log "SSH key setup completed."
+    echo "SSH key has been added to $target_user's authorized_keys."
 }
 
 disable_ssh_pw_auth() {
