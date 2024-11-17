@@ -8,6 +8,7 @@ echo "Choose a directory to pull the docker-compose.yml from:"
 echo "1. media"
 echo "2. proxy"
 echo "3. immich"
+echo "4. plex"
 read -p "Enter your choice (1/2/3): " choice
 
 # Set the directory and associated files based on the user's choice
@@ -24,6 +25,11 @@ case $choice in
     DIR="immich"
     FILES=("docker-compose.yml" ".env")
     ;;
+  4)
+    DIR="plex"
+    FILES=("docker-compose.yml" "config.sh")
+    ;;
+
   *)
     echo "Invalid choice. Exiting."
     exit 1
