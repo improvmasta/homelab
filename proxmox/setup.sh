@@ -83,7 +83,7 @@ install_packages() {
         exit 1
     fi
     
-    if ! sudo apt-get install -y net-tools gcc make perl samba cifs-utils winbind curl git bzip2 tar; then
+    if ! sudo apt-get install -y net-tools gcc make perl samba cifs-utils winbind curl git bzip2 tar qemu-guest-agent; then
         log "Package installation failed"
         exit 1
     fi
