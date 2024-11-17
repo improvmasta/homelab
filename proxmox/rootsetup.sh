@@ -9,15 +9,81 @@ log_error() {
     echo "$(date '+%Y-%m-%d %H:%M:%S') [ERROR] $1" | tee -a "$LOG_FILE"
 }
 
+# Helper function to confirm and run a task
+ask_and_execute() {
+    local task_name="$1"
+    local task_function="$2"
+
+    read -p "Do you want to proceed with ${task_name}? (yes/no): " choice
+    if [[ "$choice" =~ ^(yes|y)$ ]]; then
+        $task_function
+    fi
+}
+
+# Function to display the main menu
+main_menu() {
+    while true; do
+        clear
+        echo "Proxmox Server Setup - Main Menu"
+        echo "1. *RUN FULL SETUP*"
+        echo "2. Install Packages"
+        echo "3. Configure Repositories"
+        echo "4. Update Proxmox Appliance Templates"
+        echo "5. Create User and Add to Sudoers"
+        echo "6. Import ZFS Pool"
+        echo "7. Configure fstab Mounts"
+        echo "8. Restore from Backup"
+        echo "9. Set Up Bash Aliases"
+        echo "10. Create Update and Cleanup Script"
+        echo "11. Create Backup Script"
+        echo "12. Set Up Backup Cron"
+        echo "13. Change Variables"
+        echo "14. Exit"
+        read -p "Choose an option (1-14): " choice
+
+        case $choice in
+            1) run_all ;;
+            2) install_packages ;;
+            3) configure_repositories ;;
+            4) update_pveam_templates ;;
+            5) create_user_and_add_to_sudoers ;;
+            6) import_zfs_pool ;;
+            7) configure_fstab_mounts ;;
+            8) restore_configs ;;
+            9) setup_bash_aliases ;;
+            10) create_update_cleanup_script ;;
+            11) create_backup_script ;;
+            12) setup_backup_cron ;;
+            13) change_variables ;;
+            14) echo "Exiting..."; exit 0 ;;
+            *) echo "Invalid choice. Please choose between 1 and 14." ;;
+        esac
+
+        read -p "Press Enter to continue..." 
+    done
+}
+
+# Main function to run all tasks with confirmation
+run_all() {
+    echo "Running all steps..."
+
+    ask_and_execute "installing packages" install_packages
+    ask_and_execute "configuring repositories" configure_repositories
+    ask_and_execute "updating Proxmox appliance templates" update_pveam_templates
+    ask_and_execute "creating a user and adding to sudoers" create_user_and_add_to_sudoers
+    ask_and_execute "importing the ZFS pool" import_zfs_pool
+    ask_and_execute "configuring fstab mounts" configure_fstab_mounts
+    ask_and_execute "restoring configurations from backup" restore_configs
+    ask_and_execute "setting up bash aliases" setup_bash_aliases
+    ask_and_execute "creating the update and cleanup script" create_update_cleanup_script
+    ask_and_execute "creating the backup script" create_backup_script
+    ask_and_execute "setting up the backup cron job" setup_backup_cron
+
+    echo "All tasks completed."
+}
+
 # Function to change variables
 change_variables() {
-    echo "Current SSH key: $SSH_KEY"
-    read -p "Enter a new SSH key (leave empty to keep the current one): " new_ssh_key
-    if [ -n "$new_ssh_key" ]; then
-        SSH_KEY="$new_ssh_key"
-        echo "SSH key updated."
-    fi
-
     echo "Current backup directory: $BACKUP_DIR"
     read -p "Enter a new backup directory (leave empty to keep the current one): " new_backup_dir
     if [ -n "$new_backup_dir" ]; then
@@ -315,133 +381,6 @@ setup_backup_cron() {
     else
         echo "Cron job already exists. Skipping cron setup."
     fi
-}
-
-# Main function to run all functions
-run_all() {
-    echo "Running all steps..."
-
-    # Install packages
-    echo "Do you want to proceed with installing packages? (yes/no): "
-    read install_choice
-    if [[ "$install_choice" =~ ^(yes|y)$ ]]; then
-        install_packages
-    fi
-
-    # Configure repositories
-    echo "Do you want to proceed with configuring repositories? (yes/no): "
-    read repo_choice
-    if [[ "$repo_choice" =~ ^(yes|y)$ ]]; then
-        configure_repositories
-    fi
-
-    # Update PVEAM templates
-    echo "Do you want to proceed with updating PVEAM templates? (yes/no): "
-    read pveam_choice
-    if [[ "$pveam_choice" =~ ^(yes|y)$ ]]; then
-        update_pveam_templates
-    fi
-
-    # Create user and add to sudoers
-    echo "Do you want to proceed with creating a user and adding to sudoers? (yes/no): "
-    read user_choice
-    if [[ "$user_choice" =~ ^(yes|y)$ ]]; then
-        create_user_and_add_to_sudoers
-    fi
-
-    # Import ZFS pool
-    echo "Do you want to proceed with importing the ZFS pool? (yes/no): "
-    read zfs_choice
-    if [[ "$zfs_choice" =~ ^(yes|y)$ ]]; then
-        import_zfs_pool
-    fi
-
-    # Configure fstab mounts
-    echo "Do you want to proceed with configuring fstab mounts? (yes/no): "
-    read fstab_choice
-    if [[ "$fstab_choice" =~ ^(yes|y)$ ]]; then
-        configure_fstab_mounts
-    fi
-
-    # Restore configurations
-    echo "Do you want to proceed with restoring configurations from backup? (yes/no): "
-    read restore_choice
-    if [[ "$restore_choice" =~ ^(yes|y)$ ]]; then
-        restore_configs
-    fi
-
-    # Setup bash aliases
-    echo "Do you want to proceed with setting up bash aliases? (yes/no): "
-    read aliases_choice
-    if [[ "$aliases_choice" =~ ^(yes|y)$ ]]; then
-        setup_bash_aliases
-    fi
-
-    # Create update and cleanup script
-    echo "Do you want to proceed with creating the update and cleanup script? (yes/no): "
-    read update_script_choice
-    if [[ "$update_script_choice" =~ ^(yes|y)$ ]]; then
-        create_update_cleanup_script
-    fi
-
-    # Create backup script
-    echo "Do you want to proceed with creating the backup script? (yes/no): "
-    read backup_script_choice
-    if [[ "$backup_script_choice" =~ ^(yes|y)$ ]]; then
-        create_backup_script
-    fi
-
-    # Setup backup cron
-    echo "Do you want to proceed with setting up the backup cron job? (yes/no): "
-    read backup_cron_choice
-    if [[ "$backup_cron_choice" =~ ^(yes|y)$ ]]; then
-        setup_backup_cron
-    fi
-
-    echo "All functions completed."
-}
-
-# Function to handle menu options
-main_menu() {
-    while true; do  # Keep the menu running until the user chooses to exit
-        clear
-        echo "Proxmox Server Setup - Main Menu"
-        echo "1. Run All Functions (with prompts)"
-        echo "2. Install Packages"
-        echo "3. Configure Repositories"
-        echo "4. Update Proxmox Appliance Templates"
-        echo "5. Create User and Add to Sudoers"
-        echo "6. Import ZFS Pool"
-        echo "7. Configure fstab Mounts"
-        echo "8. Restore from Backup"
-        echo "9. Set Up Bash Aliases"
-        echo "10. Change Variables"
-        echo "11. Create Update and Cleanup Script"
-        echo "12. Create Backup Script"
-        echo "13. Set Up Backup Cron"
-        echo "14. Exit"
-        read -p "Choose an option (1-14): " choice
-
-        case $choice in
-            1) run_all ;;
-            2) install_packages ;;
-            3) configure_repositories ;;
-            4) update_pveam_templates ;;
-            5) create_user_and_add_to_sudoers ;;
-            6) import_zfs_pool ;;
-            7) configure_fstab_mounts ;;
-            8) restore_configs ;;
-            9) setup_bash_aliases ;;
-            10) change_variables ;;
-            11) create_update_cleanup_script ;;
-            12) create_backup_script ;;
-            13) setup_backup_cron ;;
-            14) echo "Exiting..."; exit 0 ;;
-            *) echo "Invalid choice. Please choose between 1 and 14." ;;
-        esac
-        # Optionally wait for the user to press a key to continue before showing the menu again
-        read -p "Press Enter to continue..." 
-    done
 }
 
 # Call the main menu function
