@@ -169,7 +169,7 @@ setup_samba_shares() {
     for share_name in "${shares[@]}"; do
         mount_point="/media/$share_name"
         sudo mkdir -p "$mount_point"
-        echo "//${server_ip}/${share_name} ${mount_point} cifs credentials=${secrets_file},uid=$(id -u),gid=$(id -g),iocharset=utf8,vers=3.0 0 0" | sudo tee -a /etc/fstab > /dev/null
+        echo "//${server_ip}/${share_name} ${mount_point} cifs credentials=${secrets_file},uid=$(id -u),gid=$(id -g),iocharset=utf8,vers=3.0,dir_mode=0777,file_mode=0777 0 0" | sudo tee -a /etc/fstab > /dev/null
         log "Added $share_name to /etc/fstab, mounted at $mount_point."
     done
 
