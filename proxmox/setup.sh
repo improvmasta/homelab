@@ -184,39 +184,45 @@ setup_samba_shares() {
 }
 
 install_docker() {
-    log "Installing Docker..."
-    if ! sudo apt-get update -y; then
-        log "Failed to update package list."
-        exit 1
-    fi
+    echo "Starting Docker installation..."
 
-    if ! sudo apt-get install -y apt-transport-https ca-certificates curl software-properties-common; then
-        log "Failed to install dependencies for Docker."
-        exit 1
-    fi
+    # Remove existing Docker-related packages
+    for pkg in docker.io docker-doc docker-compose podman-docker containerd runc; do
+        sudo apt-get remove -y "$pkg"
+    done
 
-    if ! curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/docker-archive-keyring.gpg; then
-        log "Failed to add Docker GPG key."
-        exit 1
-    fi
+    # Update package index
+    sudo apt-get update
 
-    if ! sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"; then
-        log "Failed to add Docker repository."
-        exit 1
-    fi
+    # Install necessary packages
+    sudo apt-get install -y ca-certificates curl
 
-    if ! sudo apt-get update -y; then
-        log "Failed to update Docker package list."
-        exit 1
-    fi
+    # Create directory for APT keyrings
+    sudo install -m 0755 -d /etc/apt/keyrings
 
-    if ! sudo apt-get install -y docker-ce docker-ce-cli containerd.io; then
-        log "Failed to install Docker."
-        exit 1
-    fi
+    # Download Docker GPG key
+    sudo curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc
 
-    sudo systemctl enable --now docker
-    log "Docker installation completed."
+    # Set permissions for the GPG key
+    sudo chmod a+r /etc/apt/keyrings/docker.asc
+
+    # Add Docker repository to APT sources
+    echo \
+      "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian \
+      $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+      sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+    # Update package index again
+    sudo apt-get update
+
+    # Install Docker packages
+    sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
+    # Post-installation: Add user to the docker group
+    sudo usermod -aG docker "$USER"
+
+    echo "Docker installation completed successfully."
+    echo "Please log out and back in for the changes to take effect."
 }
 
 add_ssh_key() {
