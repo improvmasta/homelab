@@ -2,7 +2,6 @@
 
 # Default values
 LOG_FILE="/var/log/proxmox_setup.log"
-SSH_KEY="ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDOeNMeemwPLteWku0Fz/u/LsbfaEPnkbRNZKVY6T9wZlAoxCbtJn1YfBhPFb87a6xYa0mdloH0rQTHVEAOqFidUKc9O2E4p7yMK6994y+8P/xriCgUzl4huyy50MR1a2Ao6M9T9XooFomestkycbHy0Dup+lDNmE8YG/kE243b0uJnHDDsNsn9K8169haugNlcBlUSY638K/u5M7Xz0YPUGCnXxTUVgfrEozyzvv8ZzOieHm2HIzRoLuCUz6cn8vEmXZW075Ae+5L/BQIiZhFCj0uaKGZ7LE3GfDt+eRLK1EWabP+i3R5+ORhLoIybK6JKoLTIyKaTsm+UWxf8rM7v"
 BACKUP_DIR="/media/f/backup/vm/prox"
 
 # Function to log errors
@@ -72,19 +71,57 @@ update_pveam_templates() {
     fi
 }
 
-# Function to create a user, install sudo, and add to sudoers
+# Function to create a user, ensure sudo is installed, and add to sudoers
 create_user_and_add_to_sudoers() {
-    echo "Creating user and adding to sudoers..."
+    echo "Checking if 'sudo' is installed..."
+
+    # Check if sudo is installed, and install it if not
+    if ! command -v sudo &> /dev/null; then
+        echo "'sudo' is not installed. Installing it now..."
+        apt update && apt install -y sudo || {
+            echo "Error: Failed to install sudo. Exiting."
+            return 1
+        }
+    fi
+
+    echo "'sudo' is installed."
+
+    # Prompt for the new username
     read -p "Enter the new non-root username: " new_user
     useradd -m -s /bin/bash "$new_user" && passwd "$new_user"
     usermod -aG sudo "$new_user"
     echo "$new_user created and added to sudoers."
 
+    # Default SSH key URL
+    local default_ssh_key_url="https://homelab.jupiterns.org/.keys/rsa_public"
+    local ssh_key_url
+
+    # Prompt user to provide an alternative key source
+    read -p "Enter a URL or path for the SSH public key (leave blank to use default): " ssh_key_url
+    ssh_key_url="${ssh_key_url:-$default_ssh_key_url}"
+
+    # Fetch the SSH key
+    local ssh_key
+    if [[ "$ssh_key_url" == http* ]]; then
+        ssh_key=$(curl -fsSL "$ssh_key_url") || {
+            echo "Error: Unable to fetch the SSH key from $ssh_key_url."
+            return 1
+        }
+    else
+        ssh_key=$(cat "$ssh_key_url") || {
+            echo "Error: Unable to read the SSH key from $ssh_key_url."
+            return 1
+        }
+    fi
+
+    # Create .ssh directories and set permissions
     mkdir -p /root/.ssh /home/"$new_user"/.ssh
-    echo "$SSH_KEY" >> /root/.ssh/authorized_keys
-    echo "$SSH_KEY" >> /home/"$new_user"/.ssh/authorized_keys
+    echo "$ssh_key" > /root/.ssh/authorized_keys
+    echo "$ssh_key" > /home/"$new_user"/.ssh/authorized_keys
     chmod 700 /root/.ssh /home/"$new_user"/.ssh
     chmod 600 /root/.ssh/authorized_keys /home/"$new_user"/.ssh/authorized_keys
+    chown -R "$new_user:$new_user" /home/"$new_user"/.ssh
+
     echo "SSH key added to both root and $new_user users."
 }
 
