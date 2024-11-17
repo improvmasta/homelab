@@ -14,6 +14,21 @@ log() {
     echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" >> "$SETUP_LOG"
 }
 
+# Helper function to prompt user before running a step
+ask_and_execute() {
+    local step_name="$1"
+    local function_name="$2"
+    
+    read -p "Do you want to proceed with $step_name? (y/n): " confirm
+    case "$confirm" in
+        [yY]|[yY][eE][sS])
+            echo "Starting $step_name..."
+            $function_name || echo "Error: $step_name failed. Check logs for details." ;;
+        *)
+            echo "Skipping $step_name." ;;
+    esac
+}
+
 # Function to prompt user for confirmation
 menu() {
     echo "Select an option:"
@@ -46,17 +61,17 @@ menu() {
     esac
 }
 
-# Full setup function that runs everything
+# Full setup function that prompts the user for each step
 full_setup() {
-    set_hostname
-    install_packages
-    share_home_directory
-    setup_samba_shares
-    install_docker
-    add_ssh_key
-    disable_ssh_pw_auth
-    create_update_cleanup_script
-    configure_bash_aliases
+    ask_and_execute "Set Hostname" set_hostname
+    ask_and_execute "Install Packages" install_packages
+    ask_and_execute "Share Home Directory" share_home_directory
+    ask_and_execute "Set Up Samba Shares" setup_samba_shares
+    ask_and_execute "Install Docker" install_docker
+    ask_and_execute "Add SSH Key Authentication" add_ssh_key
+    ask_and_execute "Disable Password Authentication for SSH" disable_ssh_pw_auth
+    ask_and_execute "Create Update/Cleanup Script" create_update_cleanup_script
+    ask_and_execute "Add Bash Aliases" configure_bash_aliases
 }
 
 set_hostname() {
