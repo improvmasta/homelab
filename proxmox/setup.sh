@@ -32,7 +32,7 @@ ask_and_execute() {
 # Function to prompt user for confirmation
 menu() {
     echo "Select an option:"
-    echo "1. Full Setup"
+    echo "1. *RUN FULL SETUP*"
     echo "2. Set Hostname"
     echo "3. Install Packages"
     echo "4. Configure Samba Share"
