@@ -42,7 +42,8 @@ menu() {
     echo "8. Disable Password Authentication for SSH"
     echo "9. Create Update/Cleanup Script"
     echo "10. Add Bash Aliases"
-    echo "11. Exit"
+    echo "11. Restore VM"
+    echo "12. Exit"
     read -p "Enter your choice: " choice
 
     case "$choice" in
@@ -56,7 +57,8 @@ menu() {
         8) disable_ssh_pw_auth ;;
         9) create_update_cleanup_script ;;
         10) configure_bash_aliases ;;
-        11) exit 0 ;;
+        11) restore_vm ;;
+        12) exit 0 ;;
         *) echo "Invalid choice, please try again." && menu ;;
     esac
 }
@@ -72,6 +74,7 @@ full_setup() {
     ask_and_execute "Disable Password Authentication for SSH" disable_ssh_pw_auth
     ask_and_execute "Create Update/Cleanup Script" create_update_cleanup_script
     ask_and_execute "Add Bash Aliases" configure_bash_aliases
+    ask_and_execute "Restore VM" restore_vm
 }
 
 set_hostname() {
@@ -309,6 +312,37 @@ alias update='/usr/local/bin/update_cleanup.sh'
 EOF
 
     log "Bash aliases added to $alias_file."
+}
+
+restore_vm() {
+    read -p "Do you want to restore an existing VM? (y/n): " confirm
+    case "$confirm" in
+        [yY]|[yY][eE][sS])
+            echo "Downloading and running the VM restore script..."
+            curl -fsSL https://github.com/improvmasta/homelab/raw/refs/heads/main/proxmox/restoredocker.sh -o /tmp/restoredocker.sh
+            if [ $? -eq 0 ]; then
+                chmod +x /tmp/restoredocker.sh
+                /tmp/restoredocker.sh || echo "Error: Failed to execute the restore script. Check for issues."
+            else
+                echo "Error: Failed to download the restore script. Check your internet connection or URL."
+            fi
+            ;;
+        *)
+            echo "Skipping VM restoration."
+            ;;
+    esac
+}
+
+# Function to restore an existing VM
+restore_vm() {
+    echo "Restoring an existing VM..."
+    curl -fsSL https://github.com/improvmasta/homelab/raw/refs/heads/main/proxmox/restoredocker.sh -o /tmp/restoredocker.sh
+    if [ $? -eq 0 ]; then
+        chmod +x /tmp/restoredocker.sh
+        /tmp/restoredocker.sh || echo "Error: Failed to execute the restore script. Check for issues."
+    else
+        echo "Error: Failed to download the restore script. Check your internet connection or URL."
+    fi
 }
 
 menu
