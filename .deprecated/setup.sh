@@ -82,15 +82,45 @@ install_hyperv_guest_additions() {
 
 # Install Docker
 install_docker() {
-    read -p "Do you want to install Docker? (y/n): " docker_install
-    if [[ "$docker_install" =~ ^[yY]$ ]]; then
-        log "Installing Docker..."
-        curl -fsSL https://github.com/improvmasta/homelab/raw/refs/heads/main/installdocker | sudo bash || { log "Failed to install Docker"; exit 1; }
-		sudo usermod -aG docker $LOCAL_USER
-        log "Docker installation completed."
-    else
-        log "Skipping Docker installation."
-    fi
+    echo "Starting Docker installation..."
+
+    # Remove existing Docker-related packages
+    for pkg in docker.io docker-doc docker-compose podman-docker containerd runc; do
+        sudo apt-get remove -y "$pkg"
+    done
+
+    # Update package index
+    sudo apt-get update
+
+    # Install necessary packages
+    sudo apt-get install -y ca-certificates curl
+
+    # Create directory for APT keyrings
+    sudo install -m 0755 -d /etc/apt/keyrings
+
+    # Download Docker GPG key
+    sudo curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc
+
+    # Set permissions for the GPG key
+    sudo chmod a+r /etc/apt/keyrings/docker.asc
+
+    # Add Docker repository to APT sources
+    echo \
+      "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian \
+      $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+      sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+    # Update package index again
+    sudo apt-get update
+
+    # Install Docker packages
+    sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
+    # Post-installation: Add user to the docker group
+    sudo usermod -aG docker "$USER"
+
+    echo "Docker installation completed successfully."
+    echo "Please log out and back in for the changes to take effect."
 }
 
 # Configure Samba and mount network shares

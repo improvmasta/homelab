@@ -14,10 +14,25 @@ log() {
     echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" >> "$SETUP_LOG"
 }
 
+# Helper function to prompt user before running a step
+ask_and_execute() {
+    local step_name="$1"
+    local function_name="$2"
+    
+    read -p "Do you want to proceed with $step_name? (y/n): " confirm
+    case "$confirm" in
+        [yY]|[yY][eE][sS])
+            echo "Starting $step_name..."
+            $function_name || echo "Error: $step_name failed. Check logs for details." ;;
+        *)
+            echo "Skipping $step_name." ;;
+    esac
+}
+
 # Function to prompt user for confirmation
 menu() {
     echo "Select an option:"
-    echo "1. Full Setup"
+    echo "1. *RUN FULL SETUP*"
     echo "2. Set Hostname"
     echo "3. Install Packages"
     echo "4. Configure Samba Share"
@@ -27,7 +42,8 @@ menu() {
     echo "8. Disable Password Authentication for SSH"
     echo "9. Create Update/Cleanup Script"
     echo "10. Add Bash Aliases"
-    echo "11. Exit"
+    echo "11. Restore VM"
+    echo "12. Exit"
     read -p "Enter your choice: " choice
 
     case "$choice" in
@@ -41,22 +57,24 @@ menu() {
         8) disable_ssh_pw_auth ;;
         9) create_update_cleanup_script ;;
         10) configure_bash_aliases ;;
-        11) exit 0 ;;
+        11) restore_vm ;;
+        12) exit 0 ;;
         *) echo "Invalid choice, please try again." && menu ;;
     esac
 }
 
-# Full setup function that runs everything
+# Full setup function that prompts the user for each step
 full_setup() {
-    set_hostname
-    install_packages
-    share_home_directory
-    setup_samba_shares
-    install_docker
-    add_ssh_key
-    disable_ssh_pw_auth
-    create_update_cleanup_script
-    configure_bash_aliases
+    ask_and_execute "Set Hostname" set_hostname
+    ask_and_execute "Install Packages" install_packages
+    ask_and_execute "Share Home Directory" share_home_directory
+    ask_and_execute "Set Up Samba Shares" setup_samba_shares
+    ask_and_execute "Install Docker" install_docker
+    ask_and_execute "Add SSH Key Authentication" add_ssh_key
+    ask_and_execute "Disable Password Authentication for SSH" disable_ssh_pw_auth
+    ask_and_execute "Create Update/Cleanup Script" create_update_cleanup_script
+    ask_and_execute "Add Bash Aliases" configure_bash_aliases
+    ask_and_execute "Restore VM" restore_vm
 }
 
 set_hostname() {
@@ -83,7 +101,7 @@ install_packages() {
         exit 1
     fi
     
-    if ! sudo apt-get install -y net-tools gcc make perl samba cifs-utils winbind curl git bzip2 tar; then
+    if ! sudo apt-get install -y net-tools gcc make perl samba cifs-utils winbind curl git bzip2 tar qemu-guest-agent; then
         log "Package installation failed"
         exit 1
     fi
@@ -169,7 +187,7 @@ setup_samba_shares() {
     for share_name in "${shares[@]}"; do
         mount_point="/media/$share_name"
         sudo mkdir -p "$mount_point"
-        echo "//${server_ip}/${share_name} ${mount_point} cifs credentials=${secrets_file},uid=$(id -u),gid=$(id -g),iocharset=utf8,vers=3.0 0 0" | sudo tee -a /etc/fstab > /dev/null
+        echo "//${server_ip}/${share_name} ${mount_point} cifs credentials=${secrets_file},uid=$(id -u),gid=$(id -g),iocharset=utf8,vers=3.0,dir_mode=0777,file_mode=0777 0 0" | sudo tee -a /etc/fstab > /dev/null
         log "Added $share_name to /etc/fstab, mounted at $mount_point."
     done
 
@@ -184,39 +202,45 @@ setup_samba_shares() {
 }
 
 install_docker() {
-    log "Installing Docker..."
-    if ! sudo apt-get update -y; then
-        log "Failed to update package list."
-        exit 1
-    fi
+    echo "Starting Docker installation..."
 
-    if ! sudo apt-get install -y apt-transport-https ca-certificates curl software-properties-common; then
-        log "Failed to install dependencies for Docker."
-        exit 1
-    fi
+    # Remove existing Docker-related packages
+    for pkg in docker.io docker-doc docker-compose podman-docker containerd runc; do
+        sudo apt-get remove -y "$pkg"
+    done
 
-    if ! curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/docker-archive-keyring.gpg; then
-        log "Failed to add Docker GPG key."
-        exit 1
-    fi
+    # Update package index
+    sudo apt-get update
 
-    if ! sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"; then
-        log "Failed to add Docker repository."
-        exit 1
-    fi
+    # Install necessary packages
+    sudo apt-get install -y ca-certificates curl
 
-    if ! sudo apt-get update -y; then
-        log "Failed to update Docker package list."
-        exit 1
-    fi
+    # Create directory for APT keyrings
+    sudo install -m 0755 -d /etc/apt/keyrings
 
-    if ! sudo apt-get install -y docker-ce docker-ce-cli containerd.io; then
-        log "Failed to install Docker."
-        exit 1
-    fi
+    # Download Docker GPG key
+    sudo curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc
 
-    sudo systemctl enable --now docker
-    log "Docker installation completed."
+    # Set permissions for the GPG key
+    sudo chmod a+r /etc/apt/keyrings/docker.asc
+
+    # Add Docker repository to APT sources
+    echo \
+      "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian \
+      $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+      sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+    # Update package index again
+    sudo apt-get update
+
+    # Install Docker packages
+    sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
+    # Post-installation: Add user to the docker group
+    sudo usermod -aG docker "$USER"
+
+    echo "Docker installation completed successfully."
+    echo "Please log out and back in for the changes to take effect."
 }
 
 add_ssh_key() {
@@ -288,6 +312,37 @@ alias update='/usr/local/bin/update_cleanup.sh'
 EOF
 
     log "Bash aliases added to $alias_file."
+}
+
+restore_vm() {
+    read -p "Do you want to restore an existing VM? (y/n): " confirm
+    case "$confirm" in
+        [yY]|[yY][eE][sS])
+            echo "Downloading and running the VM restore script..."
+            curl -fsSL https://github.com/improvmasta/homelab/raw/refs/heads/main/proxmox/restoredocker.sh -o /tmp/restoredocker.sh
+            if [ $? -eq 0 ]; then
+                chmod +x /tmp/restoredocker.sh
+                /tmp/restoredocker.sh || echo "Error: Failed to execute the restore script. Check for issues."
+            else
+                echo "Error: Failed to download the restore script. Check your internet connection or URL."
+            fi
+            ;;
+        *)
+            echo "Skipping VM restoration."
+            ;;
+    esac
+}
+
+# Function to restore an existing VM
+restore_vm() {
+    echo "Restoring an existing VM..."
+    curl -fsSL https://github.com/improvmasta/homelab/raw/refs/heads/main/proxmox/restoredocker.sh -o /tmp/restoredocker.sh
+    if [ $? -eq 0 ]; then
+        chmod +x /tmp/restoredocker.sh
+        /tmp/restoredocker.sh || echo "Error: Failed to execute the restore script. Check for issues."
+    else
+        echo "Error: Failed to download the restore script. Check your internet connection or URL."
+    fi
 }
 
 menu
