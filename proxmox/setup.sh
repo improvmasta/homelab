@@ -328,25 +328,6 @@ EOF
     log "Bash aliases added to $alias_file."
 }
 
-restore_vm() {
-    read -p "Do you want to restore an existing VM? (y/n): " confirm
-    case "$confirm" in
-        [yY]|[yY][eE][sS])
-            echo "Downloading and running the VM restore script..."
-            curl -fsSL https://github.com/improvmasta/homelab/raw/refs/heads/main/proxmox/restoredocker.sh -o /tmp/restoredocker.sh
-            if [ $? -eq 0 ]; then
-                chmod +x /tmp/restoredocker.sh
-                /tmp/restoredocker.sh || echo "Error: Failed to execute the restore script. Check for issues."
-            else
-                echo "Error: Failed to download the restore script. Check your internet connection or URL."
-            fi
-            ;;
-        *)
-            echo "Skipping VM restoration."
-            ;;
-    esac
-}
-
 # Function to restore an existing VM
 restore_vm() {
     echo "Restoring an existing VM..."
