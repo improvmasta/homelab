@@ -1,15 +1,26 @@
 #!/bin/bash
 
-# Define base GitHub repository URL
-REPO_URL="https://raw.githubusercontent.com/improvmasta/homelab/main/proxmox"
+# Exit on any error
+set -e
 
-# Prompt the user to choose a directory (media, proxy, immich)
+# Define base GitHub repository URL
+REPO_URL="https://homelab.jupiterns.org/proxmox"
+
+# Get the non-root user who invoked the script
+if [[ -n "$SUDO_USER" ]]; then
+  USER_HOME=$(eval echo ~"$SUDO_USER")
+else
+  echo "This script must be run with sudo."
+  exit 1
+fi
+
+# Prompt the user to choose a directory (media, proxy, immich, plex)
 echo "Choose a directory to pull the docker-compose.yml from:"
 echo "1. media"
 echo "2. proxy"
 echo "3. immich"
 echo "4. plex"
-read -p "Enter your choice (1/2/3): " choice
+read -p "Enter your choice (1/2/3/4): " choice
 
 # Set the directory and associated files based on the user's choice
 case $choice in
@@ -29,17 +40,19 @@ case $choice in
     DIR="plex"
     FILES=("docker-compose.yml" "config.sh")
     ;;
-
   *)
     echo "Invalid choice. Exiting."
     exit 1
     ;;
 esac
 
-# Create the .docker/compose directory in the user's home if it doesn't exist
-USER_HOME=$(eval echo ~$USER)
+# Define directories relative to the non-root user's home
 DOCKER_COMPOSE_DIR="$USER_HOME/.docker/compose"
-mkdir -p "$DOCKER_COMPOSE_DIR"
+APPDATA_DIR="$USER_HOME/.config/appdata"
+
+# Create the necessary directories if they don't exist
+echo "Creating directories if they don't exist..."
+mkdir -p "$DOCKER_COMPOSE_DIR" "$APPDATA_DIR"
 
 # Download the selected files from the GitHub repository
 for FILE in "${FILES[@]}"; do
@@ -55,10 +68,6 @@ for FILE in "${FILES[@]}"; do
     exit 1
   fi
 done
-
-# Create the .config/appdata directory if it doesn't exist
-APPDATA_DIR="$USER_HOME/.config/appdata"
-mkdir -p "$APPDATA_DIR"
 
 # Ask the user if they want to provide a restore path to copy files into appdata
 read -p "Do you want to provide a restore path to copy contents into $APPDATA_DIR? (y/n): " restore_choice
