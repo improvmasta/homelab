@@ -42,8 +42,9 @@ menu() {
     echo "8. Disable Password Authentication for SSH"
     echo "9. Create Update/Cleanup Script"
     echo "10. Add Bash Aliases"
-    echo "11. Restore VM"
-    echo "12. Exit"
+	echo "11. Add User to docker Group"
+    echo "12. Restore VM"
+    echo "13. Exit"
     read -p "Enter your choice: " choice
 
     case "$choice" in
@@ -57,8 +58,9 @@ menu() {
         8) disable_ssh_pw_auth ;;
         9) create_update_cleanup_script ;;
         10) configure_bash_aliases ;;
-        11) restore_vm ;;
-        12) exit 0 ;;
+		11) add_user_to_docker_group ;;
+        12) restore_vm ;;
+        13) exit 0 ;;
         *) echo "Invalid choice, please try again." && menu ;;
     esac
 }
@@ -74,7 +76,8 @@ full_setup() {
     ask_and_execute "Disable Password Authentication for SSH" disable_ssh_pw_auth
     ask_and_execute "Create Update/Cleanup Script" create_update_cleanup_script
     ask_and_execute "Add Bash Aliases" configure_bash_aliases
-    ask_and_execute "Restore VM" restore_vm
+    ask_and_execute "Add User to Docker Group" add_user_to_docker_group
+	ask_and_execute "Restore VM" restore_vm
 }
 
 set_hostname() {
@@ -355,5 +358,31 @@ restore_vm() {
         echo "Error: Failed to download the restore script. Check your internet connection or URL."
     fi
 }
+
+add_user_to_docker_group() {
+    echo "Adding the sudo user to the Docker group..."
+    
+    # Get the non-root user running the script
+    SUDO_USER=$(logname 2>/dev/null || echo "root")
+    
+    if [[ "$SUDO_USER" == "root" ]]; then
+        echo "No non-root user detected. Skipping adding user to Docker group."
+        return 1
+    fi
+    
+    # Ensure the Docker group exists
+    if ! getent group docker >/dev/null; then
+        echo "Docker group does not exist. Creating it..."
+        groupadd docker
+    fi
+
+    # Add the user to the Docker group
+    usermod -aG docker "$SUDO_USER"
+    
+    # Notify user of changes
+    echo "User '$SUDO_USER' added to the Docker group."
+    echo "You may need to log out and back in for the changes to take effect."
+}
+
 
 menu
