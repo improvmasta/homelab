@@ -306,11 +306,23 @@ EOF
 configure_bash_aliases() {
     log "Configuring Bash aliases..."
 
-    local alias_file="$HOME/.bash_aliases"
+    # Determine the sudo user's home directory
+    if [[ -n "$SUDO_USER" ]]; then
+        USER_HOME=$(eval echo ~"$SUDO_USER")
+    else
+        log "This script must be run with sudo. Exiting."
+        exit 1
+    fi
+
+    # Set the .bash_aliases file path for the sudo user
+    local alias_file="$USER_HOME/.bash_aliases"
+
+    # Create the .bash_aliases file if it doesn't exist
     if [[ ! -f "$alias_file" ]]; then
         touch "$alias_file"
     fi
 
+    # Append the aliases to the .bash_aliases file
     cat << 'EOF' >> "$alias_file"
 alias ..='cd ..'
 alias ...='cd ../..'
@@ -326,7 +338,11 @@ alias update='/usr/local/bin/update_cleanup.sh'
 EOF
 
     log "Bash aliases added to $alias_file."
+
+    # Ensure the .bash_aliases file is owned by the sudo user
+    chown "$SUDO_USER:$SUDO_USER" "$alias_file"
 }
+
 
 # Function to restore an existing VM
 restore_vm() {
