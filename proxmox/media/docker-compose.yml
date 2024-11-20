@@ -16,30 +16,23 @@ services:
       - ${APPDATA_PATH}/duplicati:/config
       - /home/${USERNAME}/storage:/storage
 
-  plex:
-    image: lscr.io/linuxserver/plex:latest
-    container_name: plex
-    environment: 
-      PLEX_CLAIM: https://plex.tv/claim
-      TZ: "${TZ}"
-      PUID: "1000"
-      PGID: "1000"
-      VERSION: docker
-    restart: always
+  navidrome:
+    image: deluan/navidrome:latest
+    container_name: navidrome
     ports:
-      - "1900:1900/udp"
-      - "3005:3005"
-      - "32400:32400"
-      - "32410-32414:32410-32414/udp"
-      - "32469:32469"
-      - "33400:33400"
-      - "8324:8324"
+      - "4533:4533"
+    environment:
+      # Optional: put your config options customization here. Examples:
+      PUID: 1000
+      GUID: 1000
+      ND_SCANSCHEDULE: 1h
+      ND_LOGLEVEL: info  
+      ND_SESSIONTIMEOUT: 24h
+      ND_BASEURL: "https://music.jupiterns.org"
     volumes:
-      - /media/d:/media/d:rw
-      - /media/e:/media/e:rw
-      - /dev/shm:/ramdisk:rw
-      - ${APPDATA_PATH}/plex:/config
-      - /home/${USERNAME}/storage:/storage
+      - "/home/{USERNAME}/.config/appdata/navidrome:/data"
+      - "/media/d/music/music_lindsay/:/music:ro"
+    restart: always
 
   prowlarr:
     image: lscr.io/linuxserver/prowlarr:latest
@@ -56,6 +49,25 @@ services:
       - /media/e:/media/e:rw
       - ${APPDATA_PATH}/prowlarr:/config
       - /home/${USERNAME}/storage:/storage
+  
+#  audiobookshelf:
+#    image: ghcr.io/advplyr/audiobookshelf:latest
+#    container_name: audiobookshelf
+#    ports:
+#      - 13378:80
+#    volumes:
+#      - /media/e/audiobooks:/audiobooks
+#      - /media/e/_currently_sorting:/audiobooks_sorting
+#      - /media/e/books:/books
+#      - /media/e/_currently_sorting:/books_sorting
+#      - /home/lindsay/.podcasts:/podcasts
+#      - ${APPDATA_PATH}/audiobookshelf/config:/config
+#      - ${APPDATA_PATH}/audiobookshelf/meta:/metadata
+#    environment:
+#      TZ: "${TZ}"
+#      PUID: "1000"
+#      PGID: "1000"
+#    restart: always
 
   qbittorrent:
     image: lscr.io/linuxserver/qbittorrent:latest
@@ -76,9 +88,9 @@ services:
       - /media/d:/media/d:rw
       - /media/e:/media/e:rw
       - /media/f:/media/f:rw
-      - /media/e/currently_downloading:/downloading:rw
-      - /media/e/currently_sorting:/sorting:rw
-      - /media/e/downloads:/downloads:rw
+      - /media/e/_downloads/._downloading:/downloading:rw
+      - /media/e/_currently_sorting:/sorting:rw
+      - /media/e/_downloads:/downloads:rw
       - ${APPDATA_PATH}/qbittorrent:/config
       - /home/${USERNAME}/storage:/storage
 
@@ -115,29 +127,52 @@ services:
       - /home/${USERNAME}/storage:/storage
 
   unpackerr:
-    image: ghcr.io/hotio/unpackerr:latest
+    image: golift/unpackerr
     container_name: unpackerr
-    environment: 
-      TZ: "${TZ}"
-      PUID: "1000"
-      PGID: "1000"
-      UN_FOLDER_0_DELETE_AFTER: "0"
-      UN_FOLDER_0_DELETE_ORIGINAL: "false"
-      UN_FOLDER_0_MOVE_BACK: "true"
-      UN_FOLDER_0_PATH: /storage/torrents
-      UN_INTERVAL: 2m
-      UN_LIDARR_0_API_KEY: ""
-      UN_LIDARR_0_URL: http://lidarr:8686
-      UN_RADARR_0_API_KEY: ""
-      UN_RADARR_0_URL: http://radarr:7878
-      UN_SONARR_0_API_KEY: ""
-      UN_SONARR_0_URL: http://sonarr:8989
     restart: always
+    environment:
+      - TZ=${TZ}
+      - PUID=1000
+      - GUID=1000
+      - UN_QUIET=false
+      - UN_DEBUG=false
+      - UN_ERROR_STDERR=false
+      - UN_LOG_QUEUES=1m
+      - UN_LOG_FILES=10
+      - UN_LOG_FILE_MB=10
+      - UN_INTERVAL=2m
+      - UN_START_DELAY=1m
+      - UN_RETRY_DELAY=5m
+      - UN_MAX_RETRIES=3
+      - UN_PARALLEL=1
+      - UN_FILE_MODE=0644
+      - UN_DIR_MODE=0755
+      - UN_ACTIVITY=false
+      # Sonarr Config
+      - UN_SONARR_0_URL=http://10.1.1.5:8989
+      - UN_SONARR_0_API_KEY=1cc411e36a9c4158bbb780298ded862e
+      # Radarr Config
+      - UN_RADARR_0_URL=http://10.1.1.5:7878
+      - UN_RADARR_0_API_KEY=c501b672c11d4a57a430b3782dd38407
+      # Folder Config
+      - UN_FOLDER_0_PATH=/media/e/_downloads/_applications
+      - UN_FOLDER_0_MOVE_BACK=true
+      - UN_FOLDER_1_PATH=/media/e/_downloads/_audiobooks
+      - UN_FOLDER_1_MOVE_BACK=true
+      - UN_FOLDER_2_PATH=/media/e/_downloads/_books
+      - UN_FOLDER_2_MOVE_BACK=true
+      - UN_FOLDER_3_PATH=/media/e/_downloads/_movies_manual
+      - UN_FOLDER_3_MOVE_BACK=true
+      - UN_FOLDER_4_PATH=/media/e/_downloads/_music
+      - UN_FOLDER_4_MOVE_BACK=true
+      - UN_FOLDER_5_PATH=/media/e/_downloads/_tv_shows_manual
+      - UN_FOLDER_5_MOVE_BACK=true
+      - UN_FOLDER_6_PATH=/media/e/_downloads/_unsort
+      - UN_FOLDER_6_MOVE_BACK=true
+
     volumes:
-      - /media/d:/media/d:rw
-      - /media/e:/media/e:rw
-      - ${APPDATA_PATH}/unpackerr:/config
-      - /home/${USERNAME}/storage:/storage
+      - /media/e/_downloads:/downloads
+      - /media/e:/media/e
 
   fileflows:
     image: revenz/fileflows
