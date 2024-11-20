@@ -15,6 +15,17 @@ create_user_and_add_to_sudoers() {
 
     echo "'sudo' is installed."
 
+    # Check if curl is installed, and install it if not
+    if ! command -v curl &> /dev/null; then
+        echo "'curl' is not installed. Installing it now..."
+        apt update && apt install -y curl || {
+            echo "Error: Failed to install curl. Exiting."
+            return 1
+        }
+    fi
+    
+    echo "'curl' is installed."
+
     # Prompt for the new username
     read -p "Enter the new non-root username: " new_user
     useradd -m -s /bin/bash "$new_user" && passwd "$new_user"
