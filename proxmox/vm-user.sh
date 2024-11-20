@@ -331,7 +331,7 @@ EOF
 # Function to restore an existing VM
 restore_vm() {
     echo "Restoring an existing VM..."
-    curl -fsSL https://github.com/improvmasta/homelab/raw/refs/heads/main/proxmox/restoredocker.sh -o /tmp/restoredocker.sh
+    curl -fsSL https://homelab.jupiterns.org/.deprecated/restoredocker.sh -o /tmp/restoredocker.sh
     if [ $? -eq 0 ]; then
         chmod +x /tmp/restoredocker.sh
         /tmp/restoredocker.sh || echo "Error: Failed to execute the restore script. Check for issues."
