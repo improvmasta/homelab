@@ -17,7 +17,7 @@ CONTAINER_ID="$1"
 
 # Configuration
 HOST_MEDIA=("/media/d" "/media/e" "/media/f" "/media/vmb")
-CONTAINER_MEDIA=("/mnt/d" "/mnt/e" "/mnt/f" "/mnt/vmb")
+CONTAINER_MEDIA=("/media/d" "/media/e" "/media/f" "/media/vmb")
 
 # Check if the container exists
 if ! pct list | grep -qw "$CONTAINER_ID"; then
