@@ -54,6 +54,9 @@ APPDATA_DIR="$USER_HOME/.config/appdata"
 echo "Creating directories if they don't exist..."
 mkdir -p "$DOCKER_COMPOSE_DIR" "$APPDATA_DIR"
 
+# Set ownership to the non-root user
+chown -R "$SUDO_USER:$SUDO_USER" "$DOCKER_COMPOSE_DIR" "$APPDATA_DIR"
+
 # Download the selected files from the GitHub repository
 for FILE in "${FILES[@]}"; do
   FILE_URL="$REPO_URL/$DIR/$FILE"
@@ -69,6 +72,9 @@ for FILE in "${FILES[@]}"; do
   fi
 done
 
+# Ensure downloaded files are owned by the non-root user
+chown -R "$SUDO_USER:$SUDO_USER" "$DOCKER_COMPOSE_DIR"
+
 # Ask the user if they want to provide a restore path to copy files into appdata
 read -p "Do you want to provide a restore path to copy contents into $APPDATA_DIR? (y/n): " restore_choice
 
@@ -80,6 +86,8 @@ if [[ "$restore_choice" == "y" || "$restore_choice" == "Y" ]]; then
   if [[ -d "$restore_path" ]]; then
     echo "Copying contents from $restore_path to $APPDATA_DIR..."
     cp -r "$restore_path"/* "$APPDATA_DIR/"
+    # Set ownership of copied files
+    chown -R "$SUDO_USER:$SUDO_USER" "$APPDATA_DIR"
     echo "Restore completed successfully."
   else
     echo "Invalid restore path. Exiting."
