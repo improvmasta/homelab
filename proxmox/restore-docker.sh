@@ -3,10 +3,6 @@
 # Exit on any error
 set -e
 
-# Define base backup directory
-BACKUP_BASE_DIR="/media/vmb/vmb/_docker_backup"
-RESTORE_DIR="$BACKUP_BASE_DIR"
-
 # Get the non-root user who invoked the script
 if [[ -n "$SUDO_USER" ]]; then
   USER_HOME=$(eval echo ~"$SUDO_USER")
@@ -15,13 +11,32 @@ else
   exit 1
 fi
 
+# Default backup directory
+DEFAULT_BACKUP_DIR="/media/vmb/vmb/_docker_backup"
+BACKUP_DIR="$DEFAULT_BACKUP_DIR"
+
 # Function to display the menu and handle selections
 show_menu() {
+  # Ask if the user wants to change the restore base directory
+  read -p "Do you want to change the restore base directory? (y/n): " change_dir_choice
+  if [[ "$change_dir_choice" == "y" || "$change_dir_choice" == "Y" ]]; then
+    read -p "Enter the new restore base directory: " NEW_BACKUP_DIR
+    if [[ -d "$NEW_BACKUP_DIR" ]]; then
+      BACKUP_DIR="$NEW_BACKUP_DIR"
+      echo "Backup directory changed to $BACKUP_DIR."
+    else
+      echo "Invalid directory. Using the default directory $DEFAULT_BACKUP_DIR."
+      BACKUP_DIR="$DEFAULT_BACKUP_DIR"
+    fi
+  else
+    echo "Using default backup directory: $BACKUP_DIR."
+  fi
+
   # Get the list of existing hostnames in the backup directory
-  HOSTNAMES=$(ls "$BACKUP_BASE_DIR")
+  HOSTNAMES=$(ls "$BACKUP_DIR")
 
   if [[ -z "$HOSTNAMES" ]]; then
-    echo "No backups found in $BACKUP_BASE_DIR. Exiting."
+    echo "No backups found in $BACKUP_DIR. Exiting."
     exit 1
   fi
 
@@ -38,8 +53,8 @@ show_menu() {
   done
 
   # Define restore directories
-  COMPOSE_BACKUP_DIR="$RESTORE_DIR/$HOSTNAME/compose"
-  CONFIG_BACKUP_DIR="$RESTORE_DIR/$HOSTNAME/appdata"
+  COMPOSE_BACKUP_DIR="$BACKUP_DIR/$HOSTNAME/compose"
+  CONFIG_BACKUP_DIR="$BACKUP_DIR/$HOSTNAME/appdata"
 
   # Prompt user if they want to restore Docker Compose files or appdata
   echo "1. Restore Docker Compose files"
