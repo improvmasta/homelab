@@ -61,11 +61,17 @@ chown -R "$SUDO_USER:$SUDO_USER" "$DOCKER_COMPOSE_DIR" "$APPDATA_DIR"
 for FILE in "${FILES[@]}"; do
   FILE_URL="$REPO_URL/$DIR/$FILE"
   echo "Downloading $FILE from $FILE_URL..."
-  curl -o "$DOCKER_COMPOSE_DIR/$FILE" "$FILE_URL"
+  curl -L -o "$DOCKER_COMPOSE_DIR/$FILE" "$FILE_URL"
   
   # Confirm the download
   if [[ -f "$DOCKER_COMPOSE_DIR/$FILE" ]]; then
     echo "$FILE successfully downloaded to $DOCKER_COMPOSE_DIR."
+    
+    # Make .sh files executable
+    if [[ "$FILE" == *.sh ]]; then
+      chmod +x "$DOCKER_COMPOSE_DIR/$FILE"
+      echo "Made $FILE executable."
+    fi
   else
     echo "Failed to download $FILE. Exiting."
     exit 1
@@ -96,3 +102,17 @@ if [[ "$restore_choice" == "y" || "$restore_choice" == "Y" ]]; then
 else
   echo "No restore path provided. Skipping restore."
 fi
+
+# Check for downloaded .sh files and prompt to execute them
+for FILE in "$DOCKER_COMPOSE_DIR"/*.sh; do
+  if [[ -f "$FILE" ]]; then
+    echo "Found script: $FILE"
+    read -p "Do you want to run $FILE now? (y/n): " run_choice
+    if [[ "$run_choice" == "y" || "$run_choice" == "Y" ]]; then
+      echo "Running $FILE..."
+      sudo -u "$SUDO_USER" bash "$FILE"
+    else
+      echo "Skipping execution of $FILE."
+    fi
+  fi
+done
