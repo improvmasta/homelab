@@ -3,8 +3,9 @@
 # Exit on any error
 set -e
 
-# Define base GitHub repository URL
-REPO_URL="https://homelab.jupiterns.org/proxmox"
+# Define base backup directory
+BACKUP_BASE_DIR="/media/vmb/vmb/_docker_backup"
+RESTORE_DIR="$BACKUP_BASE_DIR"
 
 # Get the non-root user who invoked the script
 if [[ -n "$SUDO_USER" ]]; then
@@ -14,105 +15,98 @@ else
   exit 1
 fi
 
-# Prompt the user to choose a directory (media, proxy, immich, plex)
-echo "Choose a directory to pull the docker-compose.yml from:"
-echo "1. media"
-echo "2. proxy"
-echo "3. immich"
-echo "4. plex"
-read -p "Enter your choice (1/2/3/4): " choice
+# Function to display the menu and handle selections
+show_menu() {
+  # Get the list of existing hostnames in the backup directory
+  HOSTNAMES=$(ls "$BACKUP_BASE_DIR")
 
-# Set the directory and associated files based on the user's choice
-case $choice in
-  1)
-    DIR="media"
-    FILES=("docker-compose.yml" "config.sh")
-    ;;
-  2)
-    DIR="proxy"
-    FILES=("docker-compose.yml")
-    ;;
-  3)
-    DIR="immich"
-    FILES=("docker-compose.yml" ".env")
-    ;;
-  4)
-    DIR="plex"
-    FILES=("docker-compose.yml" "config.sh")
-    ;;
-  *)
-    echo "Invalid choice. Exiting."
-    exit 1
-    ;;
-esac
-
-# Define directories relative to the non-root user's home
-DOCKER_COMPOSE_DIR="$USER_HOME/.docker/compose"
-APPDATA_DIR="$USER_HOME/.config/appdata"
-
-# Create the necessary directories if they don't exist
-echo "Creating directories if they don't exist..."
-mkdir -p "$DOCKER_COMPOSE_DIR" "$APPDATA_DIR"
-
-# Set ownership to the non-root user
-chown -R "$SUDO_USER:$SUDO_USER" "$DOCKER_COMPOSE_DIR" "$APPDATA_DIR"
-
-# Download the selected files from the GitHub repository
-for FILE in "${FILES[@]}"; do
-  FILE_URL="$REPO_URL/$DIR/$FILE"
-  echo "Downloading $FILE from $FILE_URL..."
-  curl -L -o "$DOCKER_COMPOSE_DIR/$FILE" "$FILE_URL"
-  
-  # Confirm the download
-  if [[ -f "$DOCKER_COMPOSE_DIR/$FILE" ]]; then
-    echo "$FILE successfully downloaded to $DOCKER_COMPOSE_DIR."
-    
-    # Make .sh files executable
-    if [[ "$FILE" == *.sh ]]; then
-      chmod +x "$DOCKER_COMPOSE_DIR/$FILE"
-      echo "Made $FILE executable."
-    fi
-  else
-    echo "Failed to download $FILE. Exiting."
+  if [[ -z "$HOSTNAMES" ]]; then
+    echo "No backups found in $BACKUP_BASE_DIR. Exiting."
     exit 1
   fi
-done
 
-# Ensure downloaded files are owned by the non-root user
-chown -R "$SUDO_USER:$SUDO_USER" "$DOCKER_COMPOSE_DIR"
-
-# Ask the user if they want to provide a restore path to copy files into appdata
-read -p "Do you want to provide a restore path to copy contents into $APPDATA_DIR? (y/n): " restore_choice
-
-if [[ "$restore_choice" == "y" || "$restore_choice" == "Y" ]]; then
-  # Ask for the restore path
-  read -p "Enter the restore path (directory to copy from): " restore_path
-
-  # Check if the provided restore path exists
-  if [[ -d "$restore_path" ]]; then
-    echo "Copying contents from $restore_path to $APPDATA_DIR..."
-    cp -r "$restore_path"/* "$APPDATA_DIR/"
-    # Set ownership of copied files
-    chown -R "$SUDO_USER:$SUDO_USER" "$APPDATA_DIR"
-    echo "Restore completed successfully."
-  else
-    echo "Invalid restore path. Exiting."
-    exit 1
-  fi
-else
-  echo "No restore path provided. Skipping restore."
-fi
-
-# Check for downloaded .sh files and prompt to execute them
-for FILE in "$DOCKER_COMPOSE_DIR"/*.sh; do
-  if [[ -f "$FILE" ]]; then
-    echo "Found script: $FILE"
-    read -p "Do you want to run $FILE now? (y/n): " run_choice
-    if [[ "$run_choice" == "y" || "$run_choice" == "Y" ]]; then
-      echo "Running $FILE..."
-      sudo -u "$SUDO_USER" bash "$FILE"
+  # Display the list of available hostnames (backups)
+  echo "Available backups:"
+  PS3="Select a hostname to restore from: "
+  select HOSTNAME in $HOSTNAMES; do
+    if [[ -n "$HOSTNAME" ]]; then
+      echo "Selected backup: $HOSTNAME"
+      break
     else
-      echo "Skipping execution of $FILE."
+      echo "Invalid selection. Please try again."
     fi
-  fi
+  done
+
+  # Define restore directories
+  COMPOSE_BACKUP_DIR="$RESTORE_DIR/$HOSTNAME/compose"
+  CONFIG_BACKUP_DIR="$RESTORE_DIR/$HOSTNAME/appdata"
+
+  # Prompt user if they want to restore Docker Compose files or appdata
+  echo "1. Restore Docker Compose files"
+  echo "2. Restore Configuration (Appdata)"
+  echo "3. Exit"
+  read -p "Choose an option (1/2/3): " choice
+
+  case $choice in
+    1)
+      restore_compose
+      ;;
+    2)
+      restore_config
+      ;;
+    3)
+      echo "Exiting script. Goodbye!"
+      exit 0
+      ;;
+    *)
+      echo "Invalid option. Exiting."
+      exit 1
+      ;;
+  esac
+}
+
+# Function to restore Docker Compose files
+restore_compose() {
+    # Ensure the destination directory exists
+    mkdir -p "$USER_HOME/.docker/compose"
+    echo "Restoring Docker Compose files from $COMPOSE_BACKUP_DIR..."
+    
+    # Copy backup files to the compose directory
+    sudo cp -r "$COMPOSE_BACKUP_DIR"/* "$USER_HOME/.docker/compose/"
+    
+    # Set ownership to the non-root user
+    sudo chown -R "$SUDO_USER:$SUDO_USER" "$USER_HOME/.docker/compose"
+    echo "Docker Compose files restored successfully."
+}
+
+# Function to restore Configuration (Appdata)
+restore_config() {
+    # Ensure the destination directory exists
+    mkdir -p "$USER_HOME/.config/appdata"
+    echo "Restoring appdata from $CONFIG_BACKUP_DIR..."
+    
+    # Stop all running Docker containers before restoring
+    echo "Stopping all running Docker containers..."
+    docker ps --quiet | xargs --no-run-if-empty docker stop
+    
+    # Copy backup files to the appdata directory
+    sudo cp -r "$CONFIG_BACKUP_DIR"/* "$USER_HOME/.config/appdata/"
+    
+    # Set ownership to the non-root user
+    sudo chown -R "$SUDO_USER:$SUDO_USER" "$USER_HOME/.config/appdata"
+    echo "Appdata restored successfully."
+    
+    # Ask if the user wants to restart Docker containers
+    read -p "Do you want to restart Docker containers? (y/n): " restart_choice
+    if [[ "$restart_choice" == "y" || "$restart_choice" == "Y" ]]; then
+        echo "Restarting Docker containers..."
+        docker ps -a --quiet | xargs --no-run-if-empty docker start
+    else
+        echo "Docker containers will remain stopped."
+    fi
+}
+
+# Main loop to keep showing the menu after an operation
+while true; do
+  show_menu
 done
