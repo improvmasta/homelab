@@ -69,7 +69,7 @@ backup_compose() {
     sudo mkdir -p "$compose_backup_dir"
 
     # Backup Docker Compose files
-    sudo cp -r ~/.docker/compose/* "$compose_backup_dir/"
+    sudo cp -r ~/.docker/compose/. "$compose_backup_dir/"
     echo "Compose files backed up to $compose_backup_dir."
 
     # Change ownership back to the sudo user
