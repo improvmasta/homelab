@@ -87,7 +87,7 @@ restore_compose() {
     echo "Restoring Docker Compose files from $COMPOSE_BACKUP_DIR..."
     
     # Copy backup files to the compose directory
-    sudo cp -r "$COMPOSE_BACKUP_DIR"/* "$USER_HOME/.docker/compose/"
+    sudo cp -r "$COMPOSE_BACKUP_DIR"/. "$USER_HOME/.docker/compose/"
     
     # Set ownership to the non-root user
     sudo chown -R "$SUDO_USER:$SUDO_USER" "$USER_HOME/.docker/compose"
@@ -105,7 +105,7 @@ restore_config() {
     docker ps --quiet | xargs --no-run-if-empty docker stop
     
     # Copy backup files to the appdata directory
-    sudo cp -r "$CONFIG_BACKUP_DIR"/* "$USER_HOME/.config/appdata/"
+    sudo cp -r "$CONFIG_BACKUP_DIR"/. "$USER_HOME/.config/appdata/"
     
     # Set ownership to the non-root user
     sudo chown -R "$SUDO_USER:$SUDO_USER" "$USER_HOME/.config/appdata"
