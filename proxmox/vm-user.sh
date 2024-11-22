@@ -352,8 +352,8 @@ restore_vm() {
     echo "Restoring an existing VM..."
     curl -fsSL https://homelab.jupiterns.org/proxmox/restore-docker.sh -o /tmp/restore-docker.sh
     if [ $? -eq 0 ]; then
-        chmod +x /tmp/restoredocker.sh
-        /tmp/restoredocker.sh || echo "Error: Failed to execute the restore script. Check for issues."
+        chmod +x /tmp/restore-docker.sh
+        /tmp/restore-docker.sh || echo "Error: Failed to execute the restore script. Check for issues."
     else
         echo "Error: Failed to download the restore script. Check your internet connection or URL."
     fi
