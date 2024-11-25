@@ -1,8 +1,15 @@
 #!/bin/bash
 
-# Variables
+# Determine the sudoer
+if [[ $EUID -eq 0 ]]; then
+    SUDO_USER_HOME=$(eval echo ~"${SUDO_USER:-root}")
+    INSTALL_DIR="$SUDO_USER_HOME/bin"
+else
+    SUDO_USER_HOME="$HOME"
+    INSTALL_DIR="$HOME/bin"
+fi
+
 SCRIPT_NAME="backup_sync.sh"
-INSTALL_DIR="$HOME/bin"
 CRON_SCHEDULE="0 0 * * *" # Nightly at midnight
 DEFAULT_BACKUP_DIR="/media/vmb/lindsay/Documents/GitHub/homelab/proxmox"
 
@@ -74,16 +81,19 @@ sed -i "s|/media/vmb/lindsay/Documents/GitHub/homelab/proxmox|$BACKUP_DIR|g" "$S
 # Make the script executable
 chmod +x "$SCRIPT_PATH"
 
-# Add the script directory to PATH in .bashrc if not already included
-if ! echo "$PATH" | grep -q "$INSTALL_DIR"; then
-    echo "Adding $INSTALL_DIR to PATH"
-    echo "export PATH=\$PATH:$INSTALL_DIR" >> "$HOME/.bashrc"
-    export PATH="$PATH:$INSTALL_DIR"
+# Add the script directory to PATH in sudoer's .bashrc if not already included
+BASHRC_PATH="$SUDO_USER_HOME/.bashrc"
+if ! grep -q "export PATH=\$PATH:$INSTALL_DIR" "$BASHRC_PATH"; then
+    echo "Adding $INSTALL_DIR to PATH for $SUDO_USER"
+    echo "export PATH=\$PATH:$INSTALL_DIR" >> "$BASHRC_PATH"
 fi
+
+# Reload PATH for the sudoer
+export PATH="$PATH:$INSTALL_DIR"
 
 # Add a cron job for the script
 CRON_JOB="$CRON_SCHEDULE $SCRIPT_PATH"
-echo "Setting up nightly cron job: $CRON_JOB"
-(crontab -l 2>/dev/null; echo "$CRON_JOB") | crontab -
+echo "Setting up nightly cron job for $SUDO_USER: $CRON_JOB"
+sudo -u "${SUDO_USER:-root}" bash -c "(crontab -l 2>/dev/null; echo \"$CRON_JOB\") | crontab -"
 
-echo "Setup complete. You can now run the script with: $SCRIPT_NAME"
+echo "Setup complete for user $SUDO_USER. The script is installed at $SCRIPT_PATH and runs nightly at midnight."
