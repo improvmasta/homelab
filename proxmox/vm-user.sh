@@ -44,7 +44,8 @@ menu() {
     echo "10. Add Bash Aliases"
 	echo "11. Add User to docker Group"
     echo "12. Restore VM"
-    echo "13. Exit"
+	echo "13. Set Up Docker Sync"
+    echo "14. Exit"
     read -p "Enter your choice: " choice
 
     case "$choice" in
@@ -60,7 +61,8 @@ menu() {
         10) configure_bash_aliases ;;
 		11) add_user_to_docker_group ;;
         12) restore_vm ;;
-        13) exit 0 ;;
+		13) setup_docker_sync ;;
+        14) exit 0 ;;
         *) echo "Invalid choice, please try again." && menu ;;
     esac
 }
@@ -78,6 +80,7 @@ full_setup() {
     ask_and_execute "Add Bash Aliases" configure_bash_aliases
     ask_and_execute "Add User to Docker Group" add_user_to_docker_group
 	ask_and_execute "Restore VM" restore_vm
+	ask_and_execute "Set Up Docker Sync" setup_docker_sync
 }
 
 set_hostname() {
@@ -356,6 +359,18 @@ restore_vm() {
         /tmp/restore-docker.sh || echo "Error: Failed to execute the restore script. Check for issues."
     else
         echo "Error: Failed to download the restore script. Check your internet connection or URL."
+    fi
+}
+
+# Function to set up Docker Sync
+setup_docker_sync() {
+    echo "Setting up Docker Sync..."
+    curl -fsSL https://homelab.jupiterns.org/proxmox/setup-docker-sync.sh -o /tmp/setup-docker-sync.sh
+    if [ $? -eq 0 ]; then
+        chmod +x /tmp/setup-docker-sync.sh
+        /tmp/setup-docker-sync.sh || echo "Error: Failed to execute the Sync script. Check for issues."
+    else
+        echo "Error: Failed to download the Sync script. Check your internet connection or URL."
     fi
 }
 
