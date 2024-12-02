@@ -1,127 +1,78 @@
 #!/bin/bash
 
-# Exit on any error
-set -e
+restore_docker_backup() {
+    local backup_base_dir="/media/f/backup/vm/"
+    local hostname=$(hostname)
+    local restore_dir
+    local user_home="/home/$(logname)"
+    local compose_dir="$user_home/.docker/compose"
+    local appdata_dir="$user_home/.config/appdata"
 
-# Get the non-root user who invoked the script
-if [[ -n "$SUDO_USER" ]]; then
-  USER_HOME=$(eval echo ~"$SUDO_USER")
-else
-  echo "This script must be run with sudo."
-  exit 1
-fi
+    echo "Docker Backup Restore"
+    echo "---------------------------------"
 
-# Default backup directory
-DEFAULT_BACKUP_DIR="/media/vmb/vmb/_docker_backup"
-BACKUP_DIR="$DEFAULT_BACKUP_DIR"
+    # Find default restore directory based on hostname
+    default_restore_dir=$(find "$backup_base_dir" -maxdepth 1 -type d -name "${hostname}-*" | head -n 1)
 
-# Function to display the menu and handle selections
-show_menu() {
-  # Ask if the user wants to change the restore base directory
-  read -p "Do you want to change the restore base directory? (y/n): " change_dir_choice
-  if [[ "$change_dir_choice" == "y" || "$change_dir_choice" == "Y" ]]; then
-    read -p "Enter the new restore base directory: " NEW_BACKUP_DIR
-    if [[ -d "$NEW_BACKUP_DIR" ]]; then
-      BACKUP_DIR="$NEW_BACKUP_DIR"
-      echo "Backup directory changed to $BACKUP_DIR."
+    if [ -n "$default_restore_dir" ]; then
+        echo "Default backup directory found: $default_restore_dir"
     else
-      echo "Invalid directory. Using the default directory $DEFAULT_BACKUP_DIR."
-      BACKUP_DIR="$DEFAULT_BACKUP_DIR"
+        echo "No matching backup directory found for hostname '$hostname'."
     fi
-  else
-    echo "Using default backup directory: $BACKUP_DIR."
-  fi
 
-  # Get the list of existing hostnames in the backup directory
-  HOSTNAMES=$(ls "$BACKUP_DIR")
+    # Prompt user to select restore directory
+    read -p "Enter the restore directory [default: $default_restore_dir]: " restore_dir
+    restore_dir=${restore_dir:-$default_restore_dir}
 
-  if [[ -z "$HOSTNAMES" ]]; then
-    echo "No backups found in $BACKUP_DIR. Exiting."
-    exit 1
-  fi
-
-  # Display the list of available hostnames (backups)
-  echo "Available backups:"
-  PS3="Select a hostname to restore from: "
-  select HOSTNAME in $HOSTNAMES; do
-    if [[ -n "$HOSTNAME" ]]; then
-      echo "Selected backup: $HOSTNAME"
-      break
-    else
-      echo "Invalid selection. Please try again."
+    # Validate restore directory
+    if [ ! -d "$restore_dir" ]; then
+        echo "Error: Restore directory '$restore_dir' does not exist."
+        exit 1
     fi
-  done
 
-  # Define restore directories
-  COMPOSE_BACKUP_DIR="$BACKUP_DIR/$HOSTNAME/compose"
-  CONFIG_BACKUP_DIR="$BACKUP_DIR/$HOSTNAME/appdata"
+    # Check if containers are running
+    running_containers=$(docker ps -q)
+    if [ -n "$running_containers" ]; then
+        echo "Warning: Containers are currently running."
+        read -p "Do you want to stop all running containers? [y/N]: " stop_containers
+        if [[ "$stop_containers" =~ ^[Yy]$ ]]; then
+            echo "Stopping all running containers..."
+            docker stop $running_containers
+        else
+            echo "Cannot proceed while containers are running. Exiting."
+            exit 1
+        fi
+    fi
 
-  # Prompt user if they want to restore Docker Compose files or appdata
-  echo "1. Restore Docker Compose files"
-  echo "2. Restore Configuration (Appdata)"
-  echo "3. Exit"
-  read -p "Choose an option (1/2/3): " choice
+    # Backup current directories if they exist
+    timestamp=$(date +%Y-%m-%d_%H-%M-%S)
+    if [ -d "$compose_dir" ]; then
+        echo "Backing up current Docker Compose directory..."
+        sudo mv "$compose_dir" "${compose_dir}_backup_$timestamp"
+    fi
+    if [ -d "$appdata_dir" ]; then
+        echo "Backing up current AppData directory..."
+        sudo mv "$appdata_dir" "${appdata_dir}_backup_$timestamp"
+    fi
 
-  case $choice in
-    1)
-      restore_compose
-      ;;
-    2)
-      restore_config
-      ;;
-    3)
-      echo "Exiting script. Goodbye!"
-      exit 0
-      ;;
-    *)
-      echo "Invalid option. Exiting."
-      exit 1
-      ;;
-  esac
+    # Extract the backup
+    echo "Restoring backup from $restore_dir..."
+    sudo mkdir -p "$compose_dir" "$appdata_dir"
+    sudo tar -xzf "$restore_dir/"*-compose.tar.gz -C "$user_home" --strip-components=2
+    sudo tar -xzf "$restore_dir/"*-appdata.tar.gz -C "$user_home" --strip-components=2
+
+    # Ensure ownership of restored files
+    echo "Setting ownership of restored files..."
+    sudo chown -R "$(logname)" "$compose_dir" "$appdata_dir"
+
+    # Offer to restart containers
+    read -p "Do you want to restart the containers? [y/N]: " restart_containers
+    if [[ "$restart_containers" =~ ^[Yy]$ ]]; then
+        echo "Restarting containers..."
+        docker start $(docker ps -a -q)
+    fi
+
+    echo "Restore complete!"
 }
 
-# Function to restore Docker Compose files
-restore_compose() {
-    # Ensure the destination directory exists
-    mkdir -p "$USER_HOME/.docker/compose"
-    echo "Restoring Docker Compose files from $COMPOSE_BACKUP_DIR..."
-    
-    # Copy backup files to the compose directory
-    sudo cp -r "$COMPOSE_BACKUP_DIR"/. "$USER_HOME/.docker/compose/"
-    
-    # Set ownership to the non-root user
-    sudo chown -R "$SUDO_USER:$SUDO_USER" "$USER_HOME/.docker/compose"
-    echo "Docker Compose files restored successfully."
-}
-
-# Function to restore Configuration (Appdata)
-restore_config() {
-    # Ensure the destination directory exists
-    mkdir -p "$USER_HOME/.config/appdata"
-    echo "Restoring appdata from $CONFIG_BACKUP_DIR..."
-    
-    # Stop all running Docker containers before restoring
-    echo "Stopping all running Docker containers..."
-    docker ps --quiet | xargs --no-run-if-empty docker stop
-    
-    # Copy backup files to the appdata directory
-    sudo cp -r "$CONFIG_BACKUP_DIR"/. "$USER_HOME/.config/appdata/"
-    
-    # Set ownership to the non-root user
-    sudo chown -R "$SUDO_USER:$SUDO_USER" "$USER_HOME/.config/appdata"
-    echo "Appdata restored successfully."
-    
-    # Ask if the user wants to restart Docker containers
-    read -p "Do you want to restart Docker containers? (y/n): " restart_choice
-    if [[ "$restart_choice" == "y" || "$restart_choice" == "Y" ]]; then
-        echo "Restarting Docker containers..."
-        docker ps -a --quiet | xargs --no-run-if-empty docker start
-    else
-        echo "Docker containers will remain stopped."
-    fi
-}
-
-# Main loop to keep showing the menu after an operation
-while true; do
-  show_menu
-done
+restore_docker_backup
