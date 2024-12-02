@@ -45,7 +45,8 @@ menu() {
 	echo "11. Add User to docker Group"
     echo "12. Restore VM"
 	echo "13. Set Up Docker Sync"
-    echo "14. Exit"
+	echo "14. Set Up Docker Backup Job"
+    echo "15. Exit"
     read -p "Enter your choice: " choice
 
     case "$choice" in
@@ -62,7 +63,8 @@ menu() {
 		11) add_user_to_docker_group ;;
         12) restore_vm ;;
 		13) setup_docker_sync ;;
-        14) exit 0 ;;
+		14) create_docker_backup_script ;;
+        15) exit 0 ;;
         *) echo "Invalid choice, please try again." && menu ;;
     esac
 }
@@ -81,6 +83,7 @@ full_setup() {
     ask_and_execute "Add User to Docker Group" add_user_to_docker_group
 	ask_and_execute "Restore VM" restore_vm
 	ask_and_execute "Set Up Docker Sync" setup_docker_sync
+	ask_and_execute "Set Up Docker Backup Job" create_docker_backup_script
 }
 
 set_hostname() {
@@ -372,6 +375,90 @@ setup_docker_sync() {
     else
         echo "Error: Failed to download the Sync script. Check your internet connection or URL."
     fi
+}
+
+# Function to create a script and cron job to backup the appdata and compose files
+create_docker_backup_script() {
+    local default_backup_dir="/media/f/backup/vm/$(hostname)-$(hostname -I | awk '{print $1}')/"
+    local backup_dir
+    local cron_schedule="0 2 * * *" # Default cron schedule: 2 am every day
+    local script_path="/home/$(logname)/docker_backup.sh"
+
+    echo "Docker Backup Script Creation"
+    echo "---------------------------------"
+
+    # Prompt for backup directory
+    read -p "Enter the backup directory [default: $default_backup_dir]: " backup_dir
+    backup_dir=${backup_dir:-$default_backup_dir}
+
+    # Prompt for cron schedule
+    echo "The default cron schedule is '2 am every day'."
+    read -p "Enter a new cron schedule in standard format (or press Enter to use the default): " user_cron_schedule
+    cron_schedule=${user_cron_schedule:-$cron_schedule}
+
+    # Create the backup script
+    echo "Creating backup script at $script_path..."
+    sudo tee "$script_path" > /dev/null << EOF
+#!/bin/bash
+set -e
+
+# Variables
+BACKUP_DIR="$backup_dir"
+USER_HOME="/home/$(logname)"
+TIMESTAMP=\$(date +%Y-%m-%d)
+MONTHLY_TAG=\$(date +%Y-%m)
+
+# Functions
+create_backup() {
+    echo "Stopping all running containers..."
+    docker stop \$(docker ps -q) || echo "No running containers to stop."
+
+    echo "Creating backup directory..."
+    mkdir -p "\$BACKUP_DIR"
+
+    echo "Backing up Docker Compose and AppData directories..."
+    tar -czf "\$BACKUP_DIR/\$TIMESTAMP-compose.tar.gz" -C "\$USER_HOME" .docker/compose
+    tar -czf "\$BACKUP_DIR/\$TIMESTAMP-appdata.tar.gz" -C "\$USER_HOME" .config/appdata
+
+    echo "Pruning backups..."
+    find "\$BACKUP_DIR" -name "*.tar.gz" -type f -mtime +3 -not -name "*-monthly.tar.gz" -exec rm -f {} +
+}
+
+create_monthly_backup() {
+    echo "Creating monthly backup..."
+    if ! find "\$BACKUP_DIR" -name "\$MONTHLY_TAG-monthly.tar.gz" -type f &>/dev/null; then
+        cp "\$BACKUP_DIR/\$TIMESTAMP-compose.tar.gz" "\$BACKUP_DIR/\$MONTHLY_TAG-monthly.tar.gz"
+        cp "\$BACKUP_DIR/\$TIMESTAMP-appdata.tar.gz" "\$BACKUP_DIR/\$MONTHLY_TAG-monthly.tar.gz"
+    fi
+
+    # Retain monthly backups for 6 months
+    find "\$BACKUP_DIR" -name "*-monthly.tar.gz" -type f -mtime +180 -exec rm -f {} +
+}
+
+restart_containers() {
+    echo "Restarting all stopped containers..."
+    docker start \$(docker ps -a -q)
+}
+
+# Execution
+create_backup
+if [ "\$(date +%d)" = "01" ]; then
+    create_monthly_backup
+fi
+restart_containers
+
+echo "Backup complete!"
+EOF
+
+    # Make the script executable
+    sudo chmod +x "$script_path"
+    sudo chown "$(logname)" "$script_path"
+
+    # Add cron job as root
+    echo "Adding the backup script to root's cron with the schedule: $cron_schedule"
+    (sudo crontab -l 2>/dev/null; echo "$cron_schedule bash $script_path") | sudo crontab -
+
+    echo "Backup script and root cron job created successfully."
 }
 
 add_user_to_docker_group() {
