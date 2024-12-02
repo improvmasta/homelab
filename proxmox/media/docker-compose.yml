@@ -71,6 +71,36 @@ services:
       - ${APPDATA_PATH}/prowlarr:/config
       - /home/${USERNAME}/storage:/storage
     restart: always
+    
+  audiobookshelf:
+    image: ghcr.io/advplyr/audiobookshelf:latest
+    container_name: audiobookshelf
+    ports:
+      - 8080:80
+    environment:
+      PUID: "1000"
+      PGID: "1000"
+      TZ: "${TZ}"
+    volumes:
+      - /media/e/audiobooks:/audiobooks
+      - /home/${USERNAME}/.podcasts:/podcasts
+      - ${APPDATA_PATH}/audiobookshelf/config:/config
+      - ${APPDATA_PATH}/audiobookshelf/metadata:/metadata
+    restart: always
+    
+  readarr:
+    image: lscr.io/linuxserver/readarr:develop
+    container_name: readarr
+    ports:
+      - 8787:8787
+    environment:
+      PUID: "1000"
+      PGID: "1000"
+      TZ: "${TZ}"
+    volumes:
+      - ${APPDATA_PATH}/readarr:/config
+      - /media/e:/media/e
+    restart: always
 
   unpackerr:
     image: golift/unpackerr
