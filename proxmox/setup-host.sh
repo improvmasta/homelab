@@ -2,7 +2,7 @@
 
 # Default values
 LOG_FILE="/var/log/proxmox_setup.log"
-BACKUP_DIR="/media/f/backup/vm/prox"
+BACKUP_DIR="/media/f/backup/vm/prox-10.1.1.2"
 
 # Function to log errors
 log_error() {
