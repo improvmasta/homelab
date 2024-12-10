@@ -14,3 +14,6 @@ wget https://homelab.jupiterns.org/proxmox/vm-user.sh && chmod +x vm-user.sh && 
 
 Backup Docker Install
 bash <(wget -qO- https://homelab.jupiterns.org/proxmox/backup-docker.sh)
+
+XFS Mirror Utilities
+bash <(wget -qO- https://github.com/improvmasta/homelab/raw/refs/heads/main/proxmox/xfs_util.sh)
