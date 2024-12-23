@@ -1,0 +1,109 @@
+services:
+  zoraxy:
+    image: zoraxydocker/zoraxy:latest
+    container_name: zoraxy
+    environment:
+      PGID: "1000"
+      PUID: "1000"
+      TZ: "${TZ}"
+      ARGS: '-noauth=false'
+    ports:
+      - 80:80
+      - 443:443
+      - 8000:8000/tcp
+    volumes:
+      - ${APPDATA_PATH}/zoraxy:/opt/zoraxy/config/
+    restart: always
+
+  adguard:
+    image: adguard/adguardhome
+    container_name: adguard
+    environment:
+      PGID: "1000"
+      PUID: "1000"
+      TZ: "${TZ}"
+    ports:
+      - "8008:80"
+      - "446:443"
+      - "53:53/tcp"
+      - "53:53/udp"
+      - "67:67/udp"
+      - "3000:3000"
+      - "853:853"
+    volumes:
+      - ${APPDATA_PATH}/adguard/work:/opt/adguardhome/work
+      - ${APPDATA_PATH}/adguard/conf:/opt/adguardhome/conf
+    restart: always
+
+  wg-easy:
+    image: ghcr.io/wg-easy/wg-easy
+    container_name: wg-easy
+    environment:
+      PGID: "1000"
+      PUID: "1000"
+      TZ: "${TZ}"
+      LANG: "en"
+      WG_HOST: "jupiterns.org"
+    ports:
+      - "51820:51820/udp"
+      - "51821:51821/tcp"
+    volumes:
+      - ${APPDATA_PATH}/wg-easy:/etc/wireguard
+    cap_add:
+      - NET_ADMIN
+#      - SYS_MODULE
+    sysctls:
+      - net.ipv4.ip_forward=1
+      - net.ipv4.conf.all.src_valid_mark=1
+    restart: always
+    
+  crashplan:
+    image: jlesage/crashplan-pro
+    container_name: crashplan
+    environment:
+      PGID: "1000"
+      PUID: "1000"
+      TZ: "${TZ}"
+    ports:
+      - "5800:5800"
+    volumes:
+      - ${APPDATA_PATH}/crashplan:/config:rw
+      - /media/d:/media/d
+      - /media/e:/media/e
+      - /media/f:/media/f
+      - /media/lindsay:/media/lindsay
+      - /media/vmb:/media/vmb
+    restart: always
+    
+  duplicati:
+    image: lscr.io/linuxserver/duplicati:latest
+    container_name: duplicati
+    environment:
+      PGID: "1000"
+      PUID: "1000"
+      TZ: "${TZ}"
+    ports:
+      - "8200:8200"
+    volumes:
+      - ${APPDATA_PATH}/duplicati:/config
+      - /etc/localtime:/etc/localtime:ro
+      - ${APPDATA_PATH}:/config/appdata
+      - /home/${USERNAME}/storage:/storage
+      - /home/${USERNAME}/.docker/:/docker
+      - /media/f/:/media/f/
+    restart: always
+    
+  watchtower:
+    image: ghcr.io/containrrr/watchtower:latest
+    container_name: watchtower
+    environment:
+      PGID: "1000"
+      PUID: "1000"
+      TZ: "${TZ}"
+      WATCHTOWER_CLEANUP: "true"
+      WATCHTOWER_SCHEDULE: "0 0 4 * * *"
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /home/${USERNAME}/storage:/storage
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: always

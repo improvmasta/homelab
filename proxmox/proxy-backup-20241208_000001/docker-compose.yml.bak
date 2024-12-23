@@ -1,0 +1,107 @@
+services:
+  zoraxy:
+    image: zoraxydocker/zoraxy:latest
+    container_name: zoraxy
+    ports:
+      - 80:80
+      - 443:443
+      - 8000:8000/tcp
+    volumes:
+      - /home/lindsay/.config/appdata/zoraxy:/opt/zoraxy/config/
+    environment:
+      ARGS: '-noauth=false'
+    restart: always
+
+  duplicati:
+    container_name: duplicati
+    image: lscr.io/linuxserver/duplicati:latest
+    hostname: duplicati
+    environment:
+      PGID: "1000"
+      PUID: "1000"
+      TZ: America/New_York
+    ports:
+      - "8200:8200"
+    volumes:
+      - /home/lindsay/.config/appdata/duplicati:/config
+      - /etc/localtime:/etc/localtime:ro
+      - /home/lindsay/.config/appdata:/config/appdata
+      - /home/lindsay/storage:/storage
+      - /home/lindsay/.docker/:/docker
+      - /media/f/:/media/f/
+    restart: always
+
+  adguard:
+    container_name: adguard
+    image: adguard/adguardhome
+    ports:
+      - "8008:80"
+      - "446:443"
+      - "53:53/tcp"
+      - "53:53/udp"
+      - "67:67/udp"
+      - "3000:3000"
+      - "853:853"
+    environment:
+      TZ: America/New_York
+    volumes:
+      - /home/lindsay/.config/appdata/adguard/work:/opt/adguardhome/work
+      - /home/lindsay/.config/appdata/adguard/conf:/opt/adguardhome/conf
+    restart: always
+
+  watchtower:
+    container_name: watchtower
+    image: ghcr.io/containrrr/watchtower:latest
+    environment:
+      WATCHTOWER_CLEANUP: "true"
+      WATCHTOWER_SCHEDULE: "0 0 4 * * *"
+      TZ: America/New_York
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /home/lindsay/storage:/storage
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: always
+
+  wg-easy:
+    environment:
+      - LANG=en
+      - WG_HOST=jupiterns.org
+    image: ghcr.io/wg-easy/wg-easy
+    container_name: wg-easy
+    volumes:
+      - /home/lindsay/.config/appdata/wgeasy:/etc/wireguard
+    ports:
+      - "51820:51820/udp"
+      - "51821:51821/tcp"
+    restart: always
+    cap_add:
+      - NET_ADMIN
+#      - SYS_MODULE
+    sysctls:
+      - net.ipv4.ip_forward=1
+      - net.ipv4.conf.all.src_valid_mark=1
+
+  tautulli:
+    image: ghcr.io/tautulli/tautulli
+    container_name: tautulli
+    restart: always
+    volumes:
+      - /home/lindsay/.config/appdata/tautulli:/config
+    environment:
+      - TZ=America/New_York
+    ports:
+      - 8181:8181
+
+  crashplan:
+    image: jlesage/crashplan-pro
+    container_name: crashplan
+    restart: always
+    ports:
+      - "5800:5800"
+    volumes:
+      - /home/lindsay/.config/appdata/crashplan:/config:rw
+      - /media/d:/media/d
+      - /media/e:/media/e
+      - /media/f:/media/f
+      - /media/lindsay:/media/lindsay
+      - /media/vmb:/media/vmb
