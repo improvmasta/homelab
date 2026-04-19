@@ -225,3 +225,34 @@ services:
       - /home/${USERNAME}/storage:/storage
       - /var/run/docker.sock:/var/run/docker.sock
     restart: always
+    
+  factorio:
+    image: mintopia/factorio-server:2.0.7
+    container_name: factorio
+    environment:
+      PUID: "1000"
+      GUID: "1000"
+      TZ: "${TZ}"
+    ports:
+     - "34198:34197/udp"
+     - "27015:27015/tcp"
+    volumes:
+     - ${APPDATA_PATH}/factorio:/factorio
+    restart: always
+
+  factorio-server-manager:
+    image: "ofsm/ofsm:latest"
+    container_name: "factorio-server-manager"
+    environment:
+      - "FACTORIO_VERSION=2.0.7"
+      - "RCON_PASS"
+    ports:
+      - "5555:80"
+      - "34197:34197/udp"
+    volumes:
+     - ${APPDATA_PATH}/factorio-sm:/opt/fsm-data
+     - ${APPDATA_PATH}/factorio2/saves:/opt/factorio/saves"
+     - ${APPDATA_PATH}/factorio2/mods:/opt/factorio/mods"
+     - ${APPDATA_PATH}/factorio2/config:/opt/factorio/config"
+     - ${APPDATA_PATH}/factorio2/mod_packs:/opt/fsm/mod_packs"
+    restart: "unless-stopped"
